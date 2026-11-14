@@ -48,45 +48,29 @@ const IS_UNDER_MAINTENANCE = false;
 
 function ScreenLoader() {
   return (
-    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-slate-50 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-tr from-blue-900/5 via-slate-900/5 to-transparent mix-blend-multiply pointer-events-none" />
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#F4F6F9] dark:bg-[#090D16] relative overflow-hidden">
+      <div
+        className="absolute inset-0 pointer-events-none opacity-40 dark:opacity-20"
+        style={{
+          backgroundImage: 'radial-gradient(#94A3B8 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+        }}
+      />
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         className="flex flex-col items-center z-10"
       >
-        <motion.div 
-          animate={{ 
-            boxShadow: [
-              "0px 0px 0px 0px rgba(59, 130, 246, 0.2)",
-              "0px 0px 0px 10px rgba(59, 130, 246, 0)",
-            ]
-          }}
-          transition={{ repeat: Infinity, duration: 1.5 }}
-          className="mb-6"
-        >
-          <MCLogo className="w-16 h-16 shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
-        </motion.div>
-        <h1 className="font-bold text-2xl tracking-tight uppercase font-sans text-slate-900">
-          Manzoor<span className="font-normal text-blue-500">Collection</span>
+        <div className="mb-5">
+          <MCLogo className="w-14 h-14 shadow-lg" />
+        </div>
+        <h1 className="font-display font-bold text-xl tracking-tight text-slate-900 dark:text-slate-100">
+          Manzoor <span className="font-medium text-blue-600 dark:text-blue-400">Collection</span>
         </h1>
-        <div className="mt-6 flex gap-1.5 bg-white px-3 py-2 rounded-full border border-slate-200 shadow-sm">
-          {[0, 1, 2].map((i) => (
-            <motion.div
-              key={i}
-              initial={{ scale: 0.5, opacity: 0.5 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{
-                repeat: Infinity,
-                repeatType: "reverse",
-                duration: 0.4,
-                delay: i * 0.15,
-                ease: "easeInOut"
-              }}
-              className="w-2 h-2 rounded-full bg-blue-500"
-            />
-          ))}
+        <div className="mt-5 flex items-center gap-2.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+          <span className="w-4 h-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+          <span>Loading workspace...</span>
         </div>
       </motion.div>
     </div>
@@ -101,14 +85,15 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode,
   if (!user) return <Navigate to="/login" replace />;
   if (branchLoading) return <ScreenLoader />;
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // If not allowed on this specific route, send to /sales if allowed or /inventory
     if (window.location.pathname === '/sales' || window.location.pathname === '/login') {
       return (
-        <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-slate-50">
-          <div className="bg-white p-8 rounded-xl shadow-sm text-center max-w-md">
-            <h2 className="text-xl font-bold text-red-600 mb-2">Access Denied</h2>
-            <p className="text-slate-600 mb-4">Your account role ({user.role}) does not have permission to access this section. Please contact your administrator.</p>
-            <a href="/" className="inline-flex items-center px-4 py-2 bg-sky-600 text-white font-medium rounded-md hover:bg-sky-700 transition">
+        <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#F4F6F9] dark:bg-[#090D16] p-4">
+          <div className="bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 p-8 rounded-xl shadow-sm text-center max-w-md w-full">
+            <h2 className="text-lg font-display font-semibold text-rose-600 dark:text-rose-400 mb-2">Access Denied</h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-5">
+              Your account role (<span className="font-mono font-medium">{user.role}</span>) does not have permission to access this section. Please contact your administrator.
+            </p>
+            <a href="/" className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
               Go to Home / Sales
             </a>
           </div>

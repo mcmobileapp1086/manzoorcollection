@@ -1,16 +1,26 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-mono: "Courier New", Courier, monospace;
+  --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-display: "Plus Jakarta Sans", "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --font-serif: Georgia, serif;
 }
 
 body, html {
-  @apply bg-slate-100/90 dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-full antialiased selection:bg-sky-500/20 selection:text-sky-600 dark:selection:text-sky-400;
+  @apply bg-[#F4F6F9] dark:bg-[#090D16] text-slate-900 dark:text-slate-100 h-full antialiased selection:bg-blue-600/15 selection:text-blue-700 dark:selection:text-blue-300;
+  font-family: var(--font-sans);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+}
+
+.tabular-nums, .font-mono {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Scrollbar Customization */
@@ -22,7 +32,7 @@ body, html {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-300/70 dark:bg-slate-700/60 rounded-full hover:bg-slate-400 dark:hover:bg-slate-600 transition-colors;
+  @apply bg-slate-300/80 dark:bg-slate-700/70 rounded-full hover:bg-slate-400 dark:hover:bg-slate-600 transition-colors;
 }
 
 @media print {
@@ -166,19 +176,22 @@ body, html {
 }
 
 .card {
-  @apply bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-xs transition-all duration-200 hover:shadow-md;
+  @apply bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-800/90 rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-150;
+}
+.kpi-card {
+  @apply bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-800/90 rounded-xl shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_6px_18px_-4px_rgba(15,23,42,0.08)] dark:hover:shadow-[0_8px_20px_-4px_rgba(0,0,0,0.45)] hover:-translate-y-0.5 transition-all duration-200;
 }
 .stat-value {
-  @apply font-mono text-2xl font-black tracking-tight text-slate-800 dark:text-white tabular-nums;
+  @apply font-mono text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 tabular-nums;
 }
 .grid-header {
-  @apply font-sans font-bold text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 p-3.5 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30;
+  @apply font-sans font-semibold text-xs tracking-wide text-slate-500 dark:text-slate-400 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60;
 }
 .grid-row {
-  @apply flex items-center p-3.5 border-b border-slate-100 dark:border-slate-800/40 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors cursor-pointer text-sm;
+  @apply flex items-center px-4 py-3 border-b border-slate-100 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer text-sm;
 }
 .glass-panel {
-  @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80;
+  @apply bg-white/90 dark:bg-[#111827]/90 backdrop-blur-md border border-slate-200/90 dark:border-slate-800/90;
 }
 
 /* Global Dark Mode Refinements for Inputs, Selects, Tables, and Cards */
@@ -189,16 +202,16 @@ body, html {
 .dark input:not([type="checkbox"]):not([type="radio"]),
 .dark select,
 .dark textarea {
-  background-color: #0f172a !important;
-  color: #f8fafc !important;
+  background-color: #0b1120 !important;
+  color: #f1f5f9 !important;
   border-color: #334155 !important;
 }
 
 .dark input:not([type="checkbox"]):not([type="radio"]):focus,
 .dark select:focus,
 .dark textarea:focus {
-  background-color: #1e293b !important;
-  border-color: #38bdf8 !important;
+  background-color: #111827 !important;
+  border-color: #3b82f6 !important;
   color: #ffffff !important;
 }
 
@@ -208,16 +221,16 @@ body, html {
 }
 
 .dark select option {
-  background-color: #0f172a;
-  color: #f8fafc;
+  background-color: #0b1120;
+  color: #f1f5f9;
 }
 
 .dark .bg-white {
-  background-color: #0f172a;
+  background-color: #111827;
 }
 
 .dark .bg-slate-50 {
-  background-color: rgba(30, 41, 59, 0.55);
+  background-color: rgba(30, 41, 59, 0.5);
 }
 
 .dark .bg-sky-50,
@@ -266,67 +279,27 @@ body, html {
   to { opacity: 1; }
 }
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+@keyframes marqueeRtl {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 .animate-fade-in-up {
-  animation: fadeInUp 0.4s ease-out forwards;
+  animation: fadeInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-
-/* Logo Animations */
-@keyframes logoTextSlide {
-  0% { transform: translateX(30px); opacity: 0; }
-  100% { transform: translateX(0); opacity: 1; }
+.animate-marquee-rtl {
+  display: flex;
+  width: max-content;
+  animation: marqueeRtl 28s linear infinite;
+  will-change: transform;
 }
-
-@keyframes logoShine {
-  0% { transform: translateX(-150%) skewX(-25deg); }
-  20% { transform: translateX(150%) skewX(-25deg); }
-  100% { transform: translateX(150%) skewX(-25deg); }
+.marquee-container:hover .animate-marquee-rtl {
+  animation-play-state: paused;
 }
-
-@keyframes subtextFade {
-  0% { opacity: 0; letter-spacing: 0.4em; transform: translateX(20px); }
-  100% { opacity: 1; letter-spacing: 0.2em; transform: translateX(0); }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { text-shadow: 0 0 5px rgba(56, 189, 248, 0); }
-  50% { text-shadow: 0 0 15px rgba(56, 189, 248, 0.4); }
-}
-
-.animate-logo-text-slide {
-  animation: logoTextSlide 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.animate-logo-shine {
-  animation: logoShine 4s infinite ease-in-out;
-  animation-delay: 1.5s;
-}
-
-.animate-logo-subtext-fade {
-  animation: subtextFade 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  animation-delay: 0.4s;
-}
-
-.logo-animation-container {
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  animation: pulse-glow 3s ease-in-out infinite;
-}
-
-.logo-animation-container:hover {
-  transform: scale(1.05);
-  filter: brightness(1.2);
-}
-
-.logo-animation-container:hover .animate-logo-subtext-fade {
-  letter-spacing: 0.3em;
-  color: #7dd3fc;
-  transition: all 0.4s ease;
-}
-
 

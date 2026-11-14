@@ -167,135 +167,121 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-zinc-950 font-sans">
-      {/* Full Screen Background */}
-      <div className="absolute inset-0 z-0">
-        <motion.img
-          initial={{ scale: 1.05, opacity: 0 }}
-          animate={{ scale: 1, opacity: 0.6 }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
-          className="absolute inset-0 h-full w-full object-cover"
-          src={bgImage}
-          alt="Premium Boutique"
-          referrerPolicy="no-referrer"
-        />
-        {/* Dark Luxury Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 via-zinc-900/60 to-zinc-950/90 mix-blend-multiply" />
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
-      </div>
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#090D16] font-sans px-4 py-12">
+      {/* Subtle architectural grid & ambient cobalt glow */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.04]"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, #94a3b8 1px, transparent 1px), linear-gradient(to bottom, #94a3b8 1px, transparent 1px)',
+          backgroundSize: '48px 48px',
+        }}
+      />
+      <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[640px] h-[320px] bg-blue-600/15 blur-[120px] rounded-full pointer-events-none" />
 
       {/* Login Card */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, delay: 0.2 }}
-        className="relative z-10 w-full max-w-md px-6 py-12 lg:px-8"
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 w-full max-w-md"
       >
-        <div className="backdrop-blur-xl bg-zinc-900/50 border border-white/10 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] p-8 sm:p-10 relative overflow-hidden">
-          {/* Subtle gold sheen */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/5 via-transparent to-white/5 pointer-events-none" />
-          
-          <div className="relative z-10">
-            <div className="flex flex-col items-center text-center mb-8">
-              <MCLogo className="w-20 h-20 mb-6 shadow-[0_0_40px_rgba(59,130,246,0.1)]" />
-              <h1 className="font-serif text-3xl tracking-wide text-white mb-2">
-                Manzoor<span className="font-light text-blue-500 italic">Collection</span>
-              </h1>
-              <p className="text-sm text-zinc-400 font-light tracking-widest uppercase">
-                Premium Retail Ledger
-              </p>
-            </div>
+        <div className="bg-[#111827]/95 border border-slate-800 rounded-2xl shadow-2xl p-8 sm:p-10">
+          <div className="flex flex-col items-center text-center mb-8">
+            <MCLogo className="w-16 h-16 mb-5" />
+            <h1 className="font-display text-2xl font-bold tracking-tight text-white">
+              Manzoor Collection
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              Multi-Branch Retail &amp; Financial Ledger
+            </p>
+          </div>
 
-            <form className="space-y-6" onSubmit={handleSubmit}>
-              {error && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
-                  <p className="text-sm text-red-200 font-light mb-3">{error}</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      loginAsDemo(email || 'admin@manzoor.com');
-                      navigate('/');
-                    }}
-                    className="w-full text-xs bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-3 rounded-lg transition-all shadow-md active:scale-95"
-                  >
-                    Bypass & Sign In as Demo Admin
-                  </button>
-                </motion.div>
-              )}
-              
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-zinc-400 uppercase tracking-widest ml-1">Email address</label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Mail className="h-4 w-4 text-zinc-500 group-focus-within:text-blue-400 transition-colors" />
-                  </div>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full pl-11 bg-zinc-950/40 border border-white/10 rounded-xl py-3.5 text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all placeholder-zinc-600 font-light backdrop-blur-sm"
-                    placeholder="admin@manzoor.com"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-zinc-400 uppercase tracking-widest ml-1">Password</label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-zinc-500 group-focus-within:text-blue-400 transition-colors" />
-                  </div>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full pl-11 bg-zinc-950/40 border border-white/10 rounded-xl py-3.5 text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all placeholder-zinc-600 font-light backdrop-blur-sm"
-                    placeholder="••••••••"
-                  />
-                </div>
-              </div>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 flex justify-center items-center py-4 px-4 border border-transparent rounded-xl shadow-[0_4px_20px_rgba(37,99,235,0.3)] text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-zinc-900 focus:ring-blue-500 disabled:opacity-50 transition-all uppercase tracking-widest"
-              >
-                {loading ? "Authenticating..." : "Sign In"}
-                {!loading && <ArrowRight className="w-4 h-4 ml-3" />}
-              </motion.button>
-
-              <div className="text-center mt-4">
-                <span className="text-xs text-zinc-500 font-light">Trouble signing in? </span>
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            {error && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-rose-950/50 border border-rose-800/60 rounded-xl p-4 text-center">
+                <p className="text-xs text-rose-200 mb-3">{error}</p>
                 <button
                   type="button"
                   onClick={() => {
-                    loginAsDemo('admin@manzoor.com');
+                    loginAsDemo(email || 'admin@manzoor.com');
                     navigate('/');
                   }}
-                  className="text-xs text-blue-400 hover:text-blue-300 font-medium underline transition-colors"
+                  className="w-full text-xs bg-rose-600 hover:bg-rose-500 text-white font-semibold py-2 px-3 rounded-lg transition-colors cursor-pointer"
                 >
-                  Quick Demo Login (Bypass Auth)
+                  Bypass &amp; Sign In as Demo Admin
                 </button>
-              </div>
-            </form>
+              </motion.div>
+            )}
 
-            <div className="mt-10 flex flex-col items-center justify-center gap-4 border-t border-white/5 pt-8">
-              <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] mb-1">Mobile App</p>
-              <InstallPWA className="!py-3 !px-6 !bg-blue-600/10 !text-blue-400 hover:!bg-blue-600/20 !shadow-none border border-blue-500/20 !text-sm !font-medium tracking-wide rounded-2xl backdrop-blur-sm transition-all active:scale-95" />
-              <p className="text-[9px] text-zinc-600 text-center max-w-[200px] leading-relaxed">
-                Install as an app for a faster experience and offline access
-              </p>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300">Email Address</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Mail className="h-4 w-4 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
+                </div>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="block w-full pl-10 pr-3.5 bg-[#090D16] border border-slate-700/80 rounded-lg py-3 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors placeholder-slate-500"
+                  placeholder="admin@manzoor.com"
+                />
+              </div>
             </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300">Password</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Lock className="h-4 w-4 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
+                </div>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full pl-10 pr-3.5 bg-[#090D16] border border-slate-700/80 rounded-lg py-3 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-colors placeholder-slate-500"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-2 flex justify-center items-center py-3 px-4 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              {loading ? "Authenticating..." : "Sign In"}
+              {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
+            </button>
+
+            <div className="text-center pt-1">
+              <span className="text-xs text-slate-500">Trouble signing in? </span>
+              <button
+                type="button"
+                onClick={() => {
+                  loginAsDemo('admin@manzoor.com');
+                  navigate('/');
+                }}
+                className="text-xs text-blue-400 hover:text-blue-300 font-medium underline transition-colors cursor-pointer"
+              >
+                Quick Demo Login
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 border-t border-slate-800 pt-6">
+            <InstallPWA className="!py-2.5 !px-5 !bg-slate-800 hover:!bg-slate-700 !text-slate-200 !shadow-none border border-slate-700 !text-xs !font-semibold rounded-lg transition-colors" />
+            <p className="text-[11px] text-slate-500 text-center">
+              Install desktop or mobile app for offline POS access
+            </p>
           </div>
         </div>
-        
-        <div className="mt-8 text-center text-xs text-zinc-500 font-light tracking-wide">
-          <p>&copy; 2026&ndash;2080 Premium Retail Systems.</p>
-          <p className="mt-1">.</p>
+
+        <div className="mt-6 text-center text-xs text-slate-500">
+          <p>&copy; 2026 Manzoor Collection &middot; Retail ERP</p>
         </div>
       </motion.div>
     </div>

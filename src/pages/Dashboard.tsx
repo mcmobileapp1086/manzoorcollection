@@ -5,7 +5,7 @@ import { useSettings } from '../context/SettingsContext';
 import { collection, where, orderBy, limit, addDoc, setDoc, updateDoc, deleteDoc, getDocs, getDoc, runTransaction, writeBatch, onSnapshot, query, doc } from '../lib/customFirestore';
 import { db, safeGetDocs, safeCollectionSnapshot } from '../lib/firebase';
 import { Link, useNavigate } from 'react-router';
-import { Settings, Save, X, Calendar, Lock, Eye, EyeOff, Printer, TrendingDown, Receipt, ExternalLink, Search, Coins, Edit2, Banknote, ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { Settings, Save, X, Calendar, Lock, Eye, EyeOff, Printer, TrendingDown, TrendingUp, BarChart3, Wallet, Package, ShoppingBag, ArrowDownLeft, Landmark, CreditCard, Receipt, ExternalLink, Search, Coins, Edit2, Banknote, ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { startOfMonth, endOfMonth, startOfDay, parse, format, isValid } from 'date-fns';
 import { calculateCashDrawer, resolveOpeningGallaForDate } from '../lib/cashDrawer';
@@ -989,20 +989,20 @@ export function Dashboard() {
   const netDrawerCash = drawerSummary.netDrawerCash;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-[1600px] mx-auto space-y-5">
       {/* Main on-screen Dashboard UI (hidden in print when monthly sale modal is printing) */}
-      <div className={activeModal === 'monthly-sale' ? "space-y-6 print:hidden" : "space-y-6"}>
+      <div className={activeModal === 'monthly-sale' ? "space-y-5 print:hidden" : "space-y-5"}>
         {error && (
-        <div className="bg-rose-100 text-rose-800 p-4 rounded-xl border border-rose-300 shadow-sm flex flex-col gap-1">
-          <p className="font-bold flex items-center gap-2">
-            <X className="w-5 h-5 text-rose-600" /> Database Connection Error:
+        <div className="bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 p-4 rounded-xl border border-rose-200 dark:border-rose-900/60 shadow-xs flex flex-col gap-1">
+          <p className="font-bold flex items-center gap-2 text-sm">
+            <X className="w-4 h-4 text-rose-600" /> Database Connection Error
           </p>
-          <p className="text-sm font-mono whitespace-pre-wrap">{error}</p>
+          <p className="text-xs font-mono whitespace-pre-wrap">{error}</p>
           {error.includes('session issue') && (
-            <div className="mt-1 border-t border-rose-200 pt-2">
+            <div className="mt-1 border-t border-rose-200 dark:border-rose-800 pt-2">
                <button 
                 onClick={() => window.open(window.location.href, '_blank')}
-                className="bg-rose-600 text-white px-3 py-1 rounded text-[10px] font-bold hover:bg-rose-700"
+                className="bg-rose-600 text-white px-3 py-1 rounded-md text-xs font-semibold hover:bg-rose-700"
               >
                 Open in New Tab to Fix Auth
               </button>
@@ -1012,465 +1012,711 @@ export function Dashboard() {
       )}
 
       {loading && !error && (
-        <div className="bg-sky-50 text-sky-700 p-4 rounded-xl border border-sky-100 shadow-sm flex items-center gap-3 animate-pulse">
-          <div className="w-2.5 h-2.5 rounded-full bg-sky-500 animate-ping" />
-          <span className="text-sm font-medium">Fetching real-time business statistics from Neon Postgres...</span>
+        <div className="bg-white dark:bg-[#111827] text-slate-600 dark:text-slate-300 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-3 text-xs font-medium">
+          <div className="w-4 h-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin shrink-0" />
+          <span>Loading business metrics...</span>
         </div>
       )}
-      
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-          <div>
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Overview Dashboard</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Real-time business statistics</p>
+
+      {/* Top Right-to-Left Low Stock Alert Ticker */}
+      {user?.role !== 'limited_access' && user?.role !== 'cashier' && lowStockItems.length > 0 && (
+        <div className="marquee-container bg-rose-50/90 dark:bg-rose-950/35 border border-rose-200/90 dark:border-rose-900/70 rounded-xl overflow-hidden flex items-center shadow-[0_1px_2px_rgba(225,29,72,0.05)]">
+          {/* Fixed Left Alert Label */}
+          <div className="flex items-center gap-2 px-3.5 py-2.5 bg-rose-600 dark:bg-rose-700 text-white text-xs font-semibold whitespace-nowrap shrink-0 z-10">
+            <Package className="w-3.5 h-3.5 shrink-0" />
+            <span>Low Stock Alert</span>
+            <span className="font-mono text-[11px] bg-white/20 px-1.5 py-0.5 rounded tabular-nums">
+              {lowStockItems.length}
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-            {/* Daily Opening Galla Box */}
+
+          {/* Continuous Right-to-Left Sliding Ticker Track */}
+          <div className="flex-1 overflow-hidden relative py-2">
+            <div
+              className="animate-marquee-rtl items-center"
+              style={{ animationDuration: `${Math.max(18, lowStockItems.length * 4)}s` }}
+            >
+              {[0, 1].map((dupIndex) => (
+                <div key={dupIndex} className="flex items-center shrink-0" aria-hidden={dupIndex === 1}>
+                  {lowStockItems.map((item, idx) => (
+                    <Link
+                      key={`${dupIndex}-${item.id || idx}`}
+                      to="/inventory"
+                      className="inline-flex items-center gap-2 px-4 text-xs text-rose-900 dark:text-rose-200 hover:text-rose-600 dark:hover:text-white transition-colors whitespace-nowrap"
+                    >
+                      <span className="font-semibold">{item.name}</span>
+                      <span className="font-mono font-bold text-rose-600 dark:text-rose-400 tabular-nums">
+                        (Stock: {item.stock ?? 0})
+                      </span>
+                      <span className="text-rose-300 dark:text-rose-700 pl-2" aria-hidden="true">&bull;</span>
+                    </Link>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Fixed Right Action Link */}
+          <Link
+            to="/inventory"
+            className="px-3.5 py-2.5 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-white hover:bg-rose-100/70 dark:hover:bg-rose-900/40 border-l border-rose-200/80 dark:border-rose-900/70 whitespace-nowrap shrink-0 transition-colors z-10"
+          >
+            Review Inventory &rarr;
+          </Link>
+        </div>
+      )}
+
+        {/* Executive Overview Toolbar */}
+        <div className="bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-800 rounded-xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.03)] flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-blue-600/10 dark:bg-blue-500/15 border border-blue-600/20 dark:border-blue-400/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <BarChart3 className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-display font-bold text-slate-900 dark:text-slate-50 tracking-tight">
+                Overview Dashboard
+              </h1>
+              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">{currentBranch?.name || 'Main Branch'}</span>
+                <span aria-hidden="true">&middot;</span>
+                <span>Real-time revenue, inventory, and cash drawer summary</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto xl:justify-end">
+            {/* Opening Galla Control */}
             <button
               type="button"
               onClick={() => {
                 setOpeningCashInput(todayOpeningBalance !== 0 ? todayOpeningBalance : (openingGallaInfo.isManual ? 0 : ''));
                 setShowOpeningCashModal(true);
               }}
-              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-3.5 py-1.5 rounded-lg font-bold text-xs shadow-sm transition cursor-pointer border border-amber-400/40"
+              className="flex items-center gap-2.5 bg-amber-50/80 hover:bg-amber-100/70 dark:bg-amber-950/35 dark:hover:bg-amber-950/55 text-amber-950 dark:text-amber-100 px-3.5 py-2 rounded-lg text-xs border border-amber-200/90 dark:border-amber-800/70 transition-colors cursor-pointer whitespace-nowrap shrink-0"
               title="Click to set or edit daily opening cash balance (روزانہ کا ابتدائی گلہ)"
             >
-              <Coins className="w-4 h-4 text-amber-100" />
-              <span>Opening Galla (افتتاحی گلہ):</span>
-              <span className="font-mono text-sm font-black">PKR {todayOpeningBalance.toLocaleString()}</span>
+              <Coins className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="font-medium text-slate-600 dark:text-slate-300">Opening Galla</span>
+              <span className="font-mono text-sm font-bold text-slate-900 dark:text-white tabular-nums">
+                PKR {todayOpeningBalance.toLocaleString()}
+              </span>
               {openingGallaInfo.isAuto && (
-                <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-500/90 text-white px-1.5 py-0.5 rounded">
-                  AUTO
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                  Auto
                 </span>
               )}
               {openingGallaInfo.isManual && (
-                <span className="text-[9px] font-black uppercase tracking-wider bg-white/25 text-white px-1.5 py-0.5 rounded">
-                  MANUAL
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                  Manual
                 </span>
               )}
-              <Edit2 className="w-3.5 h-3.5 text-amber-200 ml-0.5" />
+              <Edit2 className="w-3.5 h-3.5 text-amber-600/80 dark:text-amber-400/80 shrink-0" />
             </button>
 
-            {/* Actual Galla / Drawer Cash Indicator */}
+            {/* Actual Galla / Drawer Cash */}
             <button
               type="button"
               onClick={() => setShowDrawerBreakdownModal(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-3.5 py-1.5 rounded-lg font-bold text-xs shadow-sm hover:from-emerald-700 hover:to-teal-700 transition cursor-pointer"
+              className="flex items-center gap-2.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white px-3.5 py-2 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap shrink-0 shadow-xs"
               title="Actual Galla / Cash in Drawer (اصل دراز کیش) - Click to view full breakdown"
             >
-              <div className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
-              <span>Actual Galla (دراز کیش):</span>
-              <span className="font-mono text-sm font-black">PKR {netDrawerCash.toLocaleString()}</span>
+              <Banknote className="w-4 h-4 text-emerald-100 shrink-0" />
+              <span className="font-medium text-emerald-50">Actual Galla</span>
+              <span className="font-mono text-sm font-bold tabular-nums">
+                PKR {netDrawerCash.toLocaleString()}
+              </span>
             </button>
 
-            {/* Daily Date Selector */}
-            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/70 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 pl-2 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-sky-500" />
-                <span>Date:</span>
-              </label>
-              <input
-                type="date"
-                value={selectedDailyDateStr}
-                onChange={(e) => setSelectedDailyDateStr(e.target.value)}
-                className="rounded-md border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 bg-white dark:bg-slate-800 text-sm font-medium text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-sky-500 dark:focus:ring-sky-400 outline-none cursor-pointer"
-              />
-              {selectedDailyDateStr !== todayDateStr && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedDailyDateStr(todayDateStr)}
-                  className="text-xs bg-sky-100 hover:bg-sky-200 text-sky-700 dark:bg-sky-950 dark:text-sky-300 font-bold px-2 py-1.5 rounded transition-colors"
-                  title="Reset to Today"
-                >
-                  Today
-                </button>
-              )}
-            </div>
-
-            {/* Month Selector */}
-            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/70 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 pl-2">Month:</label>
-              <input
-                type="month"
-                value={selectedMonthStr}
-                onChange={(e) => setSelectedMonthStr(e.target.value)}
-                className="rounded-md border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 bg-white dark:bg-slate-800 text-sm font-medium text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-sky-500 dark:focus:ring-sky-400 outline-none cursor-pointer"
-              />
-            </div>
-
-            {/* Default Logged-In Branch Display */}
-            {currentBranch && (
-              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/70 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200">
-                <span className="text-[11px] text-slate-400 font-bold uppercase">Branch:</span>
-                <span className="text-sky-600 dark:text-sky-400 font-bold">{currentBranch.name}</span>
+            {/* Date & Month Filter Capsule */}
+            <div className="flex flex-wrap items-center gap-2 bg-slate-50 dark:bg-[#0B1120] px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-1.5 pr-2 border-r border-slate-200 dark:border-slate-800">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1 whitespace-nowrap">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Date</span>
+                </label>
+                <input
+                  type="date"
+                  value={selectedDailyDateStr}
+                  onChange={(e) => setSelectedDailyDateStr(e.target.value)}
+                  className="rounded-md border-0 px-1 py-0.5 bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none cursor-pointer"
+                />
+                {selectedDailyDateStr !== todayDateStr && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDailyDateStr(todayDateStr)}
+                    className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold px-1 rounded transition-colors cursor-pointer"
+                    title="Reset to Today"
+                  >
+                    Today
+                  </button>
+                )}
               </div>
-            )}
+
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">Month</label>
+                <input
+                  type="month"
+                  value={selectedMonthStr}
+                  onChange={(e) => setSelectedMonthStr(e.target.value)}
+                  className="rounded-md border-0 px-1 py-0.5 bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none cursor-pointer"
+                />
+              </div>
+            </div>
 
             {user?.role === 'super_admin' && enableDashboardEdit && (
               <button
+                type="button"
                 onClick={handleEditClick}
-                className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 rounded-lg text-sm font-medium shadow-sm hover:bg-slate-900 dark:hover:bg-slate-200 transition-colors shrink-0"
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-lg text-xs font-semibold hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors shrink-0 cursor-pointer"
               >
-                <Settings className="w-4 h-4" />
-                Edit
+                <Settings className="w-3.5 h-3.5" />
+                <span>Edit</span>
               </button>
             )}
           </div>
         </div>
 
-      {user?.role !== 'limited_access' && user?.role !== 'cashier' && lowStockItems.length > 0 && (
-        <div className="bg-rose-50 text-rose-600 rounded-lg p-6 mb-6 border border-rose-100">
-          <p className="font-bold mb-3">{lowStockItems.length} items are at or below minimum stock levels:</p>
-          <div className="flex flex-wrap gap-2">
-            {lowStockItems.slice(0, 10).map(item => (
-              <span key={item.id} className="text-xs bg-white dark:bg-slate-900 text-rose-700 px-2.5 py-1 rounded border border-rose-200 font-semibold shadow-sm">
-                {item.name} ({item.stock} left)
+      {/* Executive KPI Grid — Strictly 4 Boxes Per Line on Desktop (lg:grid-cols-4) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 1. Daily Sale */}
+        <div
+          onClick={() => handleBoxClick("daily-sale")}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Daily Sale</h3>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 font-mono tabular-nums block mt-0.5">
+                {formatDate(parse(selectedDailyDateStr, 'yyyy-MM-dd', new Date()).getTime())}
+                {selectedDailyDateStr === todayDateStr ? ' · Today' : ''}
               </span>
-            ))}
-            {lowStockItems.length > 10 && (
-              <span className="text-xs bg-rose-100 text-rose-800 px-2.5 py-1 rounded border border-rose-200 font-bold shadow-sm">
-                +{lowStockItems.length - 10} more items
-              </span>
-            )}
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-4 h-4" />
+            </div>
           </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                                        {/* Daily Sale */}
-        <div onClick={() => handleBoxClick("daily-sale")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
-          <div>
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Daily Sale</h3>
-          </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(dailySales)}</div>
-            <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
-              {formatDate(parse(selectedDailyDateStr, 'yyyy-MM-dd', new Date()).getTime())}
-              {selectedDailyDateStr === todayDateStr ? ' (TODAY)' : ''}
-            </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-bold text-indigo-700 bg-indigo-50 dark:bg-indigo-950/60 dark:text-indigo-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">{dailySuits} Suits ({dailyBills} Bills)</div>
-              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">In-Store: PKR {formatCurrency(dailyInStoreSales)}</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(dailyOnlineSales)}</div>
+          <div className="mt-3">
+            <div className="text-xl xl:text-[22px] font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50 tracking-tight truncate">
+              PKR {formatCurrency(dailySales)}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{dailySuits} Suits ({dailyBills} Bills)</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">Store {formatCurrency(dailyInStoreSales)}</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="text-blue-600 dark:text-blue-400 tabular-nums">Online {formatCurrency(dailyOnlineSales)}</span>
             </div>
           </div>
         </div>
-        {/* Daily Profit */}
+
+        {/* 2. Daily Profit */}
         {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'new_limited_access' && user?.role !== 'cashier' && (
-        <div onClick={() => handleBoxClick("daily-profit")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Daily Profit</h3>
-            <Lock className="w-3.5 h-3.5 text-amber-500/80" />
+        <div
+          onClick={() => handleBoxClick("daily-profit")}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <span>Daily Profit</span>
+                <Lock className="w-3 h-3 text-amber-500 shrink-0" />
+              </h3>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 block mt-0.5">
+                Net Margin
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Wallet className="w-4 h-4" />
+            </div>
           </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(dailyProfit)}</div>
-            <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
-              {formatDate(parse(selectedDailyDateStr, 'yyyy-MM-dd', new Date()).getTime())}
-              {selectedDailyDateStr === todayDateStr ? ' (TODAY)' : ''}
-            </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">In-Store: PKR {formatCurrency(dailyInStoreProfit)}</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(dailyOnlineProfit)}</div>
+          <div className="mt-3">
+            <div className="text-xl xl:text-[22px] font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-400 tracking-tight truncate">
+              PKR {formatCurrency(dailyProfit)}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="text-emerald-600 dark:text-emerald-400 tabular-nums font-medium">Store {formatCurrency(dailyInStoreProfit)}</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="text-blue-600 dark:text-blue-400 tabular-nums font-medium">Online {formatCurrency(dailyOnlineProfit)}</span>
             </div>
           </div>
         </div>
         )}
-        {/* Daily Expense */}
+
+        {/* 3. Daily Expense */}
         {user?.role !== 'sales_stock_only' && user?.role !== 'limited_access' && (
-        <div 
-          onClick={() => handleBoxClick("daily-expense")} 
-          className="card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-200"
+        <div
+          onClick={() => handleBoxClick("daily-expense")}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
         >
-          <div className="flex items-center justify-between gap-1">
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1.5">
-              <TrendingDown className="w-4 h-4 text-rose-500 shrink-0" />
-              <span>Daily Expense</span>
-            </h3>
-            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800 shrink-0">
-              آج کا خرچہ
-            </span>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Daily Expense</h3>
+              <span className="text-[11px] font-urdu text-slate-400 dark:text-slate-500 block mt-0.5">آج کا خرچہ</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <Receipt className="w-4 h-4" />
+            </div>
           </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className={`text-lg sm:text-3xl font-extrabold ${dailyExpenses > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-100'}`}>
+          <div className="mt-3">
+            <div className={`text-xl xl:text-[22px] font-bold font-mono tabular-nums tracking-tight truncate ${dailyExpenses > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-50'}`}>
               PKR {formatCurrency(dailyExpenses)}
             </div>
-            <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
-              {formatDate(parse(selectedDailyDateStr, 'yyyy-MM-dd', new Date()).getTime())}
-              {selectedDailyDateStr === todayDateStr ? ' (TODAY)' : ''}
-            </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                {dailyExpenseEntries.length} Items ({dailyExpenses > 0 ? 'Recorded' : 'Zero'})
-              </div>
-              <div className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                Daily Resets to 0
-              </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">{dailyExpenseEntries.length} Entries</span>
+              <span aria-hidden="true">&middot;</span>
+              <span>{formatDate(parse(selectedDailyDateStr, 'yyyy-MM-dd', new Date()).getTime())}</span>
             </div>
           </div>
         </div>
         )}
-        {/* Daily Loss Suites & Bills Card */}
+
+        {/* 4. Daily Loss Bills */}
         {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && (
-        <div 
-          onClick={() => { setLossModalFilter('daily'); handleBoxClick("loss-suites"); }} 
-          className="card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-rose-200 dark:border-rose-950/60 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-300"
+        <div
+          onClick={() => { setLossModalFilter('daily'); handleBoxClick("loss-suites"); }}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
         >
-          <div className="flex items-center justify-between gap-1">
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1.5">
-              <TrendingDown className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>Daily Loss Bills</span>
-            </h3>
-            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800 shrink-0">
-              آج کا نقصان
-            </span>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Daily Loss Bills</h3>
+              <span className="text-[11px] font-urdu text-rose-600 dark:text-rose-400 block mt-0.5">آج کا نقصان</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <TrendingDown className="w-4 h-4" />
+            </div>
           </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className={`text-lg sm:text-3xl font-extrabold ${dailyLoss > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-100'}`}>
+          <div className="mt-3">
+            <div className={`text-xl xl:text-[22px] font-bold font-mono tabular-nums tracking-tight truncate ${dailyLoss > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-50'}`}>
               PKR {formatCurrency(dailyLoss)}
             </div>
-            <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
-              {formatDate(parse(selectedDailyDateStr, 'yyyy-MM-dd', new Date()).getTime())} {selectedDailyDateStr === todayDateStr ? '(TODAY)' : ''}
-            </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                {dailyLossBills} Loss Bills ({dailyLossSuits} Suits)
-              </div>
-              <div className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                Month: PKR {formatCurrency(monthlyLoss)}
-              </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">
+                {dailyLossBills} Bills ({dailyLossSuits} Suits)
+              </span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="tabular-nums">Month {formatCurrency(monthlyLoss)}</span>
             </div>
           </div>
         </div>
         )}
-        {/* Monthly Sale */}
+
+        {/* 5. Monthly Sale */}
         {user?.role !== 'sales_stock_only' && user?.role !== 'cashier' && user?.role !== 'limited_access' && (
-        <div onClick={() => handleBoxClick("monthly-sale")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
-          <div>
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Monthly Sale</h3>
-          </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(monthlySales)}</div>
-            <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">{lastMonthlyBillDate || formatMonthName(selectedMonthStr)}</span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-bold text-purple-700 bg-purple-50 dark:bg-purple-950/60 dark:text-purple-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">{monthlySuits} Suits ({monthlyBills} Bills)</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(monthlyOnlineSales)}</div>
-            </div>
-          </div>
-        </div>
-        )}
-        {/* Monthly Profit */}
-        {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'new_limited_access' && user?.role !== 'cashier' && (
-        <div onClick={() => handleBoxClick("monthly-profit")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Monthly Profit</h3>
-            <Lock className="w-3.5 h-3.5 text-amber-500/80" />
-          </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(monthlyProfit)}</div>
-            <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">{lastMonthlyBillDate || formatMonthName(selectedMonthStr)}</span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Sales: PKR {formatCurrency(monthlySales)}</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(monthlyOnlineProfit)}</div>
-            </div>
-          </div>
-        </div>
-        )}
-        {/* Monthly Expense */}
-        {user?.role !== 'sales_stock_only' && user?.role !== 'limited_access' && (
-        <div 
-          onClick={() => handleBoxClick("monthly-expense")} 
-          className="card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-200"
+        <div
+          onClick={() => handleBoxClick("monthly-sale")}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
         >
-          <div className="flex items-center justify-between gap-1">
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1.5">
-              <Receipt className="w-4 h-4 text-rose-500 shrink-0" />
-              <span>Monthly Expense</span>
-            </h3>
-            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800 shrink-0">
-              اس ماہ کا خرچہ
-            </span>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Monthly Sale</h3>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 block mt-0.5">
+                {formatMonthName(selectedMonthStr)}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+              <BarChart3 className="w-4 h-4" />
+            </div>
           </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className={`text-lg sm:text-3xl font-extrabold ${monthlyExpenses > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-100'}`}>
+          <div className="mt-3">
+            <div className="text-xl xl:text-[22px] font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50 tracking-tight truncate">
+              PKR {formatCurrency(monthlySales)}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{monthlySuits} Suits ({monthlyBills} Bills)</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="text-blue-600 dark:text-blue-400 tabular-nums">Online {formatCurrency(monthlyOnlineSales)}</span>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* 6. Monthly Profit */}
+        {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'new_limited_access' && user?.role !== 'cashier' && (
+        <div
+          onClick={() => handleBoxClick("monthly-profit")}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <span>Monthly Profit</span>
+                <Lock className="w-3 h-3 text-amber-500 shrink-0" />
+              </h3>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 block mt-0.5">
+                {formatMonthName(selectedMonthStr)}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-xl xl:text-[22px] font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-400 tracking-tight truncate">
+              PKR {formatCurrency(monthlyProfit)}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="text-emerald-600 dark:text-emerald-400 tabular-nums font-medium">Sales {formatCurrency(monthlySales)}</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="text-blue-600 dark:text-blue-400 tabular-nums font-medium">Online {formatCurrency(monthlyOnlineProfit)}</span>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* 7. Monthly Expense */}
+        {user?.role !== 'sales_stock_only' && user?.role !== 'limited_access' && (
+        <div
+          onClick={() => handleBoxClick("monthly-expense")}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Monthly Expense</h3>
+              <span className="text-[11px] font-urdu text-slate-400 dark:text-slate-500 block mt-0.5">اس ماہ کا خرچہ</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <Receipt className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className={`text-xl xl:text-[22px] font-bold font-mono tabular-nums tracking-tight truncate ${monthlyExpenses > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-50'}`}>
               PKR {formatCurrency(monthlyExpenses)}
             </div>
-            <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
-              {formatMonthName(selectedMonthStr)}
-            </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                {monthlyExpenseEntries.length} Items ({formatMonthName(selectedMonthStr)})
-              </div>
-              <div className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                {Array.from(new Set(monthlyExpenseEntries.map(e => e.reference || 'General'))).length} Accounts
-              </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">{monthlyExpenseEntries.length} Entries</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="tabular-nums">{Array.from(new Set(monthlyExpenseEntries.map(e => e.reference || 'General'))).length} Accounts</span>
             </div>
           </div>
         </div>
         )}
-        {/* Monthly Loss Suites & Bills Card */}
+
+        {/* 8. Monthly Loss Bills */}
         {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && (
-        <div 
-          onClick={() => { setLossModalFilter('monthly'); handleBoxClick("loss-suites"); }} 
-          className="card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-rose-200 dark:border-rose-950/60 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-300"
+        <div
+          onClick={() => { setLossModalFilter('monthly'); handleBoxClick("loss-suites"); }}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
         >
-          <div className="flex items-center justify-between gap-1">
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1.5">
-              <TrendingDown className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>Monthly Loss Bills</span>
-            </h3>
-            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800 shrink-0">
-              اس ماہ کا نقصان
-            </span>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Monthly Loss Bills</h3>
+              <span className="text-[11px] font-urdu text-rose-600 dark:text-rose-400 block mt-0.5">اس ماہ کا نقصان</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <TrendingDown className="w-4 h-4" />
+            </div>
           </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className={`text-lg sm:text-3xl font-extrabold ${monthlyLoss > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-100'}`}>
+          <div className="mt-3">
+            <div className={`text-xl xl:text-[22px] font-bold font-mono tabular-nums tracking-tight truncate ${monthlyLoss > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-50'}`}>
               PKR {formatCurrency(monthlyLoss)}
             </div>
-            <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
-              {formatMonthName(selectedMonthStr)}
-            </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                {monthlyLossBills} Loss Bills ({monthlyLossSuits} Suits)
-              </div>
-              <div className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                All Time: PKR {formatCurrency(totalLoss)} ({totalLossBills})
-              </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-rose-600 dark:text-rose-400 tabular-nums">
+                {monthlyLossBills} Bills ({monthlyLossSuits} Suits)
+              </span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="tabular-nums">All {formatCurrency(totalLoss)} ({totalLossBills})</span>
             </div>
           </div>
         </div>
         )}
-        {/* Total Revenue */}
+
+        {/* 9. Total Revenue */}
         {((user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'cashier') || user?.role === 'new_limited_access') && (
-        <div onClick={() => handleBoxClick("total-sale")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
-          <div>
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Total Revenue</h3>
+        <div
+          onClick={() => handleBoxClick("total-sale")}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Total Revenue</h3>
+              <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 tabular-nums block mt-0.5">
+                {lastTotalBillDate ? `Updated ${lastTotalBillDate}` : 'Cumulative'}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+              <Landmark className="w-4 h-4" />
+            </div>
           </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(totalSales)}</div>
-            {lastTotalBillDate && (<span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">{lastTotalBillDate}</span>)}
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-bold text-indigo-700 bg-indigo-50 dark:bg-indigo-950/60 dark:text-indigo-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">{totalSuits} Suits ({totalBills} Bills)</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(totalOnlineSales)}</div>
+          <div className="mt-3">
+            <div className="text-xl xl:text-[22px] font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50 tracking-tight truncate">
+              PKR {formatCurrency(totalSales)}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{totalSuits} Suits ({totalBills} Bills)</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="text-blue-600 dark:text-blue-400 tabular-nums">Online {formatCurrency(totalOnlineSales)}</span>
             </div>
           </div>
         </div>
         )}
-        {/* Overall Profit */}
+
+        {/* 10. Overall Profit */}
         {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'new_limited_access' && user?.role !== 'cashier' && (
-        <div onClick={() => handleBoxClick("total-profit")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Overall Profit</h3>
-            <Lock className="w-3.5 h-3.5 text-amber-500/80" />
+        <div
+          onClick={() => handleBoxClick("total-profit")}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <span>Overall Profit</span>
+                <Lock className="w-3 h-3 text-amber-500 shrink-0" />
+              </h3>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 block mt-0.5">
+                Cumulative Net
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Wallet className="w-4 h-4" />
+            </div>
           </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(totalProfit)}</div>
-            {lastTotalBillDate && (<span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">{lastTotalBillDate}</span>)}
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Sales: PKR {formatCurrency(totalSales)}</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(totalOnlineProfit)}</div>
+          <div className="mt-3">
+            <div className="text-xl xl:text-[22px] font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-400 tracking-tight truncate">
+              PKR {formatCurrency(totalProfit)}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="text-emerald-600 dark:text-emerald-400 tabular-nums font-medium">Sales {formatCurrency(totalSales)}</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="text-blue-600 dark:text-blue-400 tabular-nums font-medium">Online {formatCurrency(totalOnlineProfit)}</span>
             </div>
           </div>
         </div>
         )}
 
-        {/* Stock Value */}
+        {/* 11. Stock Value */}
         {((user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'cashier') || user?.role === 'new_limited_access') && (
-        <div onClick={() => handleBoxClick("stock")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
-          <div>
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Stock Value</h3>
+        <div
+          onClick={() => handleBoxClick("stock")}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Stock Value</h3>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 block mt-0.5">Inventory Cost</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Package className="w-4 h-4" />
+            </div>
           </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(stockValue)}</div>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-medium text-purple-600 bg-purple-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Items: {inventory.length}</div>
-              <div className="text-[10px] sm:text-xs font-medium text-rose-600 bg-rose-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Low Stock: {lowStockItems.length}</div>
+          <div className="mt-3">
+            <div className="text-xl xl:text-[22px] font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50 tracking-tight truncate">
+              PKR {formatCurrency(stockValue)}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{inventory.length} Items</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="text-rose-600 dark:text-rose-400 tabular-nums font-medium">{lowStockItems.length} Low Stock</span>
             </div>
           </div>
         </div>
         )}
 
-        {/* Total Payable (Vendor Payable) */}
+        {/* 12. Monthly Purchases */}
         {((user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'cashier') || user?.role === 'new_limited_access') && (
-        <div onClick={() => { setPayableModalTab('vendors'); handleBoxClick("vendor-payable"); }} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-200`}>
-          <div>
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase flex items-center justify-between gap-1">
-              <span>Vendor Payable (وینڈرز کو دینا ہے)</span>
-              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full shrink-0">دینا ہے</span>
-            </h3>
+        <div
+          onClick={() => navigate('/purchases')}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Monthly Purchases</h3>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 block mt-0.5">
+                {formatMonthName(selectedMonthStr)}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+              <ShoppingBag className="w-4 h-4" />
+            </div>
           </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className={`text-lg sm:text-3xl font-extrabold ${totalVendorPayableOnly > 0 ? 'text-rose-600' : 'text-slate-800 dark:text-slate-100'}`}>
+          <div className="mt-3">
+            <div className="text-xl xl:text-[22px] font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50 tracking-tight truncate">
+              PKR {formatCurrency(monthlyPurchasesValue)}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-medium text-slate-700 dark:text-slate-200 tabular-nums">Daily {formatCurrency(dailyPurchasesValue)}</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="tabular-nums">All {formatCurrency(totalPurchasesValue)}</span>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* 13. Actual Galla / Cash Drawer */}
+        <div
+          onClick={() => setShowDrawerBreakdownModal(true)}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Actual Galla</h3>
+              <span className="text-[11px] font-urdu text-emerald-600 dark:text-emerald-400 block mt-0.5">آج کا دراز کیش</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Banknote className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-xl xl:text-[22px] font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-400 tracking-tight truncate">
+              PKR {netDrawerCash.toLocaleString()}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="text-amber-600 dark:text-amber-400 font-medium tabular-nums">Open {formatCurrency(todayOpeningBalance)}</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="tabular-nums">Cash {formatCurrency(drawerSummary.inStoreCashSales)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 14. Vendor Payable */}
+        {((user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'cashier') || user?.role === 'new_limited_access') && (
+        <div
+          onClick={() => { setPayableModalTab('vendors'); handleBoxClick("vendor-payable"); }}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Vendor Payable</h3>
+              <span className="text-[11px] font-urdu text-rose-600 dark:text-rose-400 block mt-0.5">دینا ہے</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <ArrowUpRight className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className={`text-xl xl:text-[22px] font-bold font-mono tabular-nums tracking-tight truncate ${totalVendorPayableOnly > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-50'}`}>
               PKR {formatCurrency(totalVendorPayableOnly)}
             </div>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 dark:bg-sky-950/60 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Vendors: {vendorBalances.filter(v => v.balance < 0).length}</div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
+                {vendorBalances.filter(v => v.balance < 0).length} Vendors
+              </span>
               {totalCustomerPrepaid > 0 && (
-                <div className="text-[10px] sm:text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/60 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                  + PKR {formatCurrency(totalCustomerPrepaid)} Cust. Advance
-                </div>
+                <>
+                  <span aria-hidden="true">&middot;</span>
+                  <span className="text-amber-600 dark:text-amber-400 tabular-nums">
+                    +PKR {formatCurrency(totalCustomerPrepaid)} Adv.
+                  </span>
+                </>
               )}
             </div>
           </div>
         </div>
         )}
 
-        {/* Total Receivable (Customer Receivable) */}
+        {/* 15. Customer Receivable */}
         {((user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'cashier') || user?.role === 'new_limited_access') && (
-        <div onClick={() => { setReceivableModalTab('customers'); handleBoxClick("vendor-receivable"); }} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-emerald-200`}>
-          <div>
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase flex items-center justify-between gap-1">
-              <span>Customer Receivable (کسٹمرز سے لینا ہے)</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full shrink-0">وصولی</span>
-            </h3>
+        <div
+          onClick={() => { setReceivableModalTab('customers'); handleBoxClick("vendor-receivable"); }}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Customer Receivable</h3>
+              <span className="text-[11px] font-urdu text-emerald-600 dark:text-emerald-400 block mt-0.5">وصولی</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <ArrowDownLeft className="w-4 h-4" />
+            </div>
           </div>
-          <div className="mt-2 flex flex-col justify-end flex-grow">
-            <div className={`text-lg sm:text-3xl font-extrabold ${totalCustomerReceivable > 0 ? 'text-emerald-600' : 'text-slate-800 dark:text-slate-100'}`}>
+          <div className="mt-3">
+            <div className={`text-xl xl:text-[22px] font-bold font-mono tabular-nums tracking-tight truncate ${totalCustomerReceivable > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-50'}`}>
               PKR {formatCurrency(totalCustomerReceivable)}
             </div>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 dark:bg-sky-950/60 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Customers: {customerBalances.filter(c => c.balance < 0).length}</div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
+                {customerBalances.filter(c => c.balance < 0).length} Customers
+              </span>
               {totalVendorReceivableOnly > 0 && (
-                <div className="text-[10px] sm:text-xs font-medium text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                  + PKR {formatCurrency(totalVendorReceivableOnly)} Vendor Adv.
-                </div>
+                <>
+                  <span aria-hidden="true">&middot;</span>
+                  <span className="text-blue-600 dark:text-blue-400 tabular-nums">
+                    +PKR {formatCurrency(totalVendorReceivableOnly)} Adv.
+                  </span>
+                </>
               )}
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* 16. Total Overall Expense */}
+        {user?.role !== 'sales_stock_only' && user?.role !== 'limited_access' && (
+        <div
+          onClick={() => navigate('/expenses')}
+          className="kpi-card p-4 xl:p-5 flex flex-col justify-between min-h-[148px] cursor-pointer relative overflow-hidden group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">Overall Expenses</h3>
+              <span className="text-[11px] font-urdu text-slate-400 dark:text-slate-500 block mt-0.5">کل اخراجات</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <CreditCard className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-xl xl:text-[22px] font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50 tracking-tight truncate">
+              PKR {formatCurrency(totalExpenses)}
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-medium text-rose-600 dark:text-rose-400 tabular-nums">{expenseEntries.length} Entries</span>
+              <span aria-hidden="true">&middot;</span>
+              <span className="tabular-nums">Month {formatCurrency(monthlyExpenses)}</span>
             </div>
           </div>
         </div>
         )}
       </div>
+
+      {/* Real-Time Sales Activity Table */}
       {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && (
-      <div className="card mt-8 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800/50 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 rounded-t-xl text-slate-700 dark:text-slate-200">
-          <h2 className="text-lg font-bold italic tracking-wide uppercase">Real-Time Sales Activity</h2>
-          <Link to="/sales" className="px-4 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium">VIEW ALL</Link>
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/70 dark:bg-slate-900/50">
+          <div>
+            <h2 className="text-sm font-display font-bold text-slate-900 dark:text-slate-100 tracking-tight">Recent Sales Activity</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Latest counter and online transactions</p>
+          </div>
+          <Link
+            to="/sales"
+            className="px-3.5 py-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap shrink-0"
+          >
+            View All &rarr;
+          </Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-100 dark:border-slate-800/50">
-                <th className="p-4 text-sm font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">TXN ID</th>
-                <th className="p-4 text-sm font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">CUSTOMER</th>
-                <th className="p-4 text-sm font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">DATE</th>
-                <th className="p-4 text-sm font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">AMOUNT</th>
-                <th className="p-4 text-sm font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">STATUS</th>
+              <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 bg-slate-50/40 dark:bg-slate-900/30">
+                <th className="py-3 px-5">Invoice / Ref</th>
+                <th className="py-3 px-5">Customer</th>
+                <th className="py-3 px-5">Date &amp; Time</th>
+                <th className="py-3 px-5 text-right">Amount</th>
+                <th className="py-3 px-5 text-right">Status</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
               {sortedSales.slice(0, 5).map(sale => {
-                const saleDate = sale.date || 0;
+                const saleTs = getSaleTime(sale);
+                const isReturn = sale.transactionType === 'Return';
                 return (
-                  <tr key={sale.id} className="border-b border-slate-50 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="p-4 text-sm font-medium text-slate-700 dark:text-slate-200">{sale.id.slice(-6).toUpperCase()}</td>
-                    <td className="p-4 text-sm text-slate-600 dark:text-slate-300">{sale.customerName || 'Walk-in'}</td>
-                    <td className="p-4 text-sm text-slate-500 dark:text-slate-400">{saleDate.toLocaleString()}</td>
-                    <td className="p-4 text-sm font-semibold text-slate-700 dark:text-slate-200">PKR {formatCurrency(sale.total || 0)}</td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${
-                        sale.transactionType === 'Return' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        {sale.transactionType === 'Return' ? 'RETURNED' : 'COMPLETED'}
+                  <tr key={sale.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3.5 px-5 font-mono font-semibold text-slate-800 dark:text-slate-200">
+                      {sale.invoiceNo ? `#${sale.invoiceNo}` : sale.id.slice(-6).toUpperCase()}
+                    </td>
+                    <td className="py-3.5 px-5 text-slate-700 dark:text-slate-300 font-medium">
+                      {sale.customerName || 'Walk-in'}
+                    </td>
+                    <td className="py-3.5 px-5 text-slate-500 dark:text-slate-400 font-mono tabular-nums">
+                      {formatDateTime(saleTs)}
+                    </td>
+                    <td className="py-3.5 px-5 text-right font-mono font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                      PKR {formatCurrency(sale.total || 0)}
+                    </td>
+                    <td className="py-3.5 px-5 text-right font-semibold">
+                      <span className={`inline-flex items-center gap-1.5 ${isReturn ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isReturn ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                        {isReturn ? 'Returned' : 'Completed'}
                       </span>
                     </td>
                   </tr>
@@ -1478,7 +1724,9 @@ export function Dashboard() {
               })}
               {sortedSales.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-500 dark:text-slate-400">No recent activity</td>
+                  <td colSpan={5} className="py-10 px-5 text-center text-xs text-slate-500 dark:text-slate-400">
+                    No recent sales recorded yet.
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -2810,40 +3058,40 @@ export function Dashboard() {
 
       {/* Modal for setting / editing Daily Opening Galla */}
       {showOpeningCashModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#111827] rounded-xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
-                  <Coins className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <Coins className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Daily Opening Galla</h2>
-                  <p className="text-xs text-slate-500 font-urdu">روزانہ کا پہلا پرانا کیش گلہ درج کریں</p>
+                  <h2 className="text-base font-display font-semibold text-slate-900 dark:text-slate-100">Daily Opening Galla</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-urdu">روزانہ کا پہلا پرانا کیش گلہ درج کریں</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowOpeningCashModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveDailyOpeningBalance} className="space-y-4">
-              <div className="bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
-                <div className="flex justify-between font-bold">
+              <div className="bg-slate-50 dark:bg-[#0B1120] p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-2">
+                <div className="flex justify-between font-medium text-slate-900 dark:text-slate-100">
                   <span>Branch: {currentBranch?.name || 'Main Branch'}</span>
-                  <span>Date: {selectedDailyDateStr}</span>
+                  <span className="font-mono tabular-nums">{selectedDailyDateStr}</span>
                 </div>
                 {!openingGallaInfo.isActive ? (
-                  <p className="text-[11px] font-urdu text-amber-800 dark:text-amber-300">
+                  <p className="text-[11px] font-urdu text-amber-700 dark:text-amber-400">
                     پہلی بار Manual Opening Galla درج کریں — اس کے بعد اگلے دن سے پچھلے دن کا Actual Galla خودبخود اگلے دن کے Opening Galla میں شامل ہوتا رہے گا۔
                   </p>
                 ) : openingGallaInfo.isAuto ? (
-                  <div className="bg-emerald-100/80 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-lg p-2 text-[11px] text-emerald-900 dark:text-emerald-200">
-                    <div className="font-bold">
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 rounded-lg p-2.5 text-[11px] text-emerald-900 dark:text-emerald-200">
+                    <div className="font-semibold">
                       Auto Carry-Forward Active (Anchor: {openingGallaInfo.anchorDate})
                     </div>
                     <div className="font-urdu mt-0.5">
@@ -2851,8 +3099,8 @@ export function Dashboard() {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-sky-100/70 dark:bg-sky-950/50 border border-sky-300 dark:border-sky-800 rounded-lg p-2 text-[11px] text-sky-900 dark:text-sky-200">
-                    <div className="font-bold">
+                  <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/60 rounded-lg p-2.5 text-[11px] text-blue-900 dark:text-blue-200">
+                    <div className="font-semibold">
                       Manual Entry Saved for {selectedDailyDateStr}
                     </div>
                     <div className="font-urdu mt-0.5">
@@ -2863,8 +3111,8 @@ export function Dashboard() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                  Opening Cash Amount (روپے)
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                  Opening Cash Amount (PKR)
                 </label>
                 <input
                   type="number"
@@ -2875,21 +3123,21 @@ export function Dashboard() {
                   placeholder="e.g. 5000"
                   value={openingCashInput}
                   onChange={(e) => setOpeningCashInput(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-base font-mono font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 px-3.5 py-2.5 bg-slate-50 dark:bg-[#0B1120] text-slate-900 dark:text-slate-100 text-base font-mono font-bold tabular-nums focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none"
                 />
               </div>
 
               {/* Quick suggestion buttons */}
-              <div className="flex flex-wrap gap-2 pt-1">
-                <span className="text-[10px] font-bold text-slate-400 w-full">Quick Set:</span>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                <span className="text-[11px] font-medium text-slate-400 w-full">Quick Set</span>
                 {[0, 1000, 2000, 5000, 10000, 20000].map(amt => (
                   <button
                     key={amt}
                     type="button"
                     onClick={() => setOpeningCashInput(amt)}
-                    className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-mono font-bold hover:bg-amber-100 dark:hover:bg-amber-950 transition"
+                    className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-mono font-semibold tabular-nums hover:border-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors cursor-pointer"
                   >
-                    {amt === 0 ? 'Zero (0)' : `${(amt/1000).toFixed(0)}k`}
+                    {amt === 0 ? '0' : `${(amt/1000).toFixed(0)}k`}
                   </button>
                 ))}
               </div>
@@ -2901,7 +3149,7 @@ export function Dashboard() {
                       type="button"
                       disabled={isSavingOpeningCash}
                       onClick={handleRevertOpeningToAuto}
-                      className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition-colors disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       Revert to Auto
                     </button>
@@ -2911,16 +3159,16 @@ export function Dashboard() {
                   <button
                     type="button"
                     onClick={() => setShowOpeningCashModal(false)}
-                    className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-medium transition-colors"
+                    className="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSavingOpeningCash}
-                    className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md transition-all disabled:opacity-50 flex items-center gap-2"
+                    className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Save className="w-4 h-4" />
+                    <Save className="w-3.5 h-3.5" />
                     {isSavingOpeningCash ? 'Saving...' : 'Save Opening Galla'}
                   </button>
                 </div>
@@ -2932,43 +3180,43 @@ export function Dashboard() {
 
       {/* Modal for Actual Galla / Drawer Cash Breakdown */}
       {showDrawerBreakdownModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200 dark:border-slate-800 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#111827] rounded-xl shadow-xl max-w-2xl w-full p-6 border border-slate-200 dark:border-slate-800 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-                  <Banknote className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <Banknote className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black text-slate-800 dark:text-slate-100">
-                    Actual Galla Breakdown (اصل دراز کیش کا حساب)
+                  <h2 className="text-base font-display font-semibold text-slate-900 dark:text-slate-100">
+                    Actual Galla Breakdown
                   </h2>
-                  <p className="text-xs text-slate-500">
-                    Branch: {currentBranch?.name || 'Main Branch'} &bull; Date: {selectedDailyDateStr}
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {currentBranch?.name || 'Main Branch'} &middot; <span className="font-mono tabular-nums">{selectedDailyDateStr}</span>
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowDrawerBreakdownModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="overflow-y-auto space-y-4 pr-1 flex-1">
               {/* Reconciliation Formula Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60">
-                  <div className="flex items-center justify-between text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#0B1120] border border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center justify-between text-[11px] font-medium text-amber-700 dark:text-amber-400">
                     <span className="flex items-center gap-1">
                       <span>1. Opening Galla (+)</span>
                       {openingGallaInfo.isAuto && (
-                        <span className="bg-emerald-600 text-white px-1 py-0.2 rounded text-[8px]">AUTO</span>
+                        <span className="text-[9px] font-semibold uppercase text-emerald-600 dark:text-emerald-400">AUTO</span>
                       )}
                       {openingGallaInfo.isManual && (
-                        <span className="bg-amber-600 text-white px-1 py-0.2 rounded text-[8px]">MANUAL</span>
+                        <span className="text-[9px] font-semibold uppercase text-amber-600 dark:text-amber-400">MANUAL</span>
                       )}
                     </span>
                     <button
@@ -2978,103 +3226,103 @@ export function Dashboard() {
                         setOpeningCashInput(todayOpeningBalance !== 0 ? todayOpeningBalance : (openingGallaInfo.isManual ? 0 : ''));
                         setShowOpeningCashModal(true);
                       }}
-                      className="underline hover:text-amber-900"
+                      className="underline hover:text-amber-800 dark:hover:text-amber-300 cursor-pointer"
                     >
                       Edit
                     </button>
                   </div>
-                  <div className="text-base font-black font-mono text-amber-800 dark:text-amber-200 mt-1">
+                  <div className="text-base font-mono font-bold tabular-nums text-slate-900 dark:text-white mt-1">
                     PKR {drawerSummary.openingGalla.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-amber-700/80 font-urdu">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-urdu mt-0.5">
                     {openingGallaInfo.isAuto && openingGallaInfo.previousDateStr
                       ? `گزشتہ روز (${openingGallaInfo.previousDateStr}) سے خودکار`
                       : 'افتتاحی گلہ'}
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60">
-                  <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#0B1120] border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                     2. In-Store Cash Sale (+)
                   </div>
-                  <div className="text-base font-black font-mono text-emerald-800 dark:text-emerald-200 mt-1">
+                  <div className="text-base font-mono font-bold tabular-nums text-slate-900 dark:text-white mt-1">
                     PKR {drawerSummary.inStoreCashSales.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-emerald-700/80 font-urdu">
-                    نقد کاؤنٹر سیل (آن لائن/بینک شامل نہیں)
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-urdu mt-0.5">
+                    نقد کاؤنٹر سیل (آن لائن شامل نہیں)
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/60">
-                  <div className="text-[10px] font-bold text-sky-700 dark:text-sky-300 uppercase">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#0B1120] border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] font-medium text-blue-700 dark:text-blue-400">
                     3. Owner Cash In (+)
                   </div>
-                  <div className="text-base font-black font-mono text-sky-800 dark:text-sky-200 mt-1">
+                  <div className="text-base font-mono font-bold tabular-nums text-slate-900 dark:text-white mt-1">
                     PKR {drawerSummary.ownerCashIn.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-sky-700/80 font-urdu">مالک سے کیش وصول</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-urdu mt-0.5">مالک سے کیش وصول</div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60">
-                  <div className="text-[10px] font-bold text-rose-700 dark:text-rose-300 uppercase">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#0B1120] border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
                     4. Cash Handover (-)
                   </div>
-                  <div className="text-base font-black font-mono text-rose-800 dark:text-rose-200 mt-1">
+                  <div className="text-base font-mono font-bold tabular-nums text-slate-900 dark:text-white mt-1">
                     - PKR {drawerSummary.cashHandoversToOwner.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-rose-700/80 font-urdu">مالک کو نقد دیا</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-urdu mt-0.5">مالک کو نقد دیا</div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/60">
-                  <div className="text-[10px] font-bold text-orange-700 dark:text-orange-300 uppercase">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#0B1120] border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
                     5. Cash Expenses (-)
                   </div>
-                  <div className="text-base font-black font-mono text-orange-800 dark:text-orange-200 mt-1">
+                  <div className="text-base font-mono font-bold tabular-nums text-slate-900 dark:text-white mt-1">
                     - PKR {drawerSummary.shopCashExpenses.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-orange-700/80 font-urdu">دکان کے نقد اخراجات</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-urdu mt-0.5">دکان کے نقد اخراجات</div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60">
-                  <div className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#0B1120] border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
                     6. Cash Returns (-)
                   </div>
-                  <div className="text-base font-black font-mono text-purple-800 dark:text-purple-200 mt-1">
+                  <div className="text-base font-mono font-bold tabular-nums text-slate-900 dark:text-white mt-1">
                     - PKR {drawerSummary.inStoreCashReturns.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-purple-700/80 font-urdu">واپسی نقد کیش</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-urdu mt-0.5">واپسی نقد کیش</div>
                 </div>
               </div>
 
               {/* Net Result Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-md">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 rounded-lg bg-emerald-600 text-white">
                 <div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-emerald-100">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-emerald-100">
                     Actual Galla / Net Cash in Drawer (=)
                   </div>
                   <div className="text-[11px] font-urdu text-emerald-100/90">
                     کل سیل (PKR {formatCurrency(dailySales)}) میں سے بینک/آن لائن، اخراجات اور ہینڈ اوور نکال کر اصل دراز کیش
                   </div>
                 </div>
-                <div className="text-2xl font-black font-mono">
+                <div className="text-xl font-mono font-bold tabular-nums">
                   PKR {drawerSummary.netDrawerCash.toLocaleString()}
                 </div>
               </div>
 
               {/* Itemized Drawer Entries */}
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-                <div className="bg-slate-50 dark:bg-slate-800/70 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800 flex justify-between">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+                <div className="bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800 flex justify-between">
                   <span>Today's Drawer Cash Entries ({drawerSummary.rows.length})</span>
-                  <span className="font-urdu text-slate-500">آج کے دراز کیش کا ریکارڈ</span>
+                  <span className="font-urdu text-slate-500 dark:text-slate-400">آج کے دراز کیش کا ریکارڈ</span>
                 </div>
                 {drawerSummary.rows.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-slate-500">
+                  <div className="p-6 text-center text-xs text-slate-500 dark:text-slate-400">
                     No cash drawer entries recorded for {selectedDailyDateStr}.
                   </div>
                 ) : (
                   <div className="max-h-60 overflow-y-auto">
                     <table className="w-full text-left border-collapse text-xs">
-                      <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 text-[10px] uppercase text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                      <thead className="sticky top-0 bg-slate-50 dark:bg-[#0B1120] text-[11px] font-medium text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                         <tr>
                           <th className="py-2 px-3">Type</th>
                           <th className="py-2 px-3">Ref</th>
@@ -3086,11 +3334,11 @@ export function Dashboard() {
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {drawerSummary.rows.map((r) => (
                           <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                            <td className="py-2 px-3 font-bold">
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${
+                            <td className="py-2 px-3 font-medium">
+                              <span className={`inline-flex items-center gap-1 text-[11px] ${
                                 r.inflow > 0
-                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                                  ? 'text-emerald-700 dark:text-emerald-400'
+                                  : 'text-rose-600 dark:text-rose-400'
                               }`}>
                                 {r.inflow > 0 ? <ArrowDownRight className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
                                 {r.label}
@@ -3100,10 +3348,10 @@ export function Dashboard() {
                             <td className="py-2 px-3 text-slate-700 dark:text-slate-300 max-w-[200px] truncate" title={r.description}>
                               {r.description}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600">
+                            <td className="py-2 px-3 text-right font-mono font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                               {r.inflow > 0 ? `+${r.inflow.toLocaleString()}` : '-'}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-rose-600">
+                            <td className="py-2 px-3 text-right font-mono font-semibold tabular-nums text-rose-600 dark:text-rose-400">
                               {r.outflow > 0 ? `-${r.outflow.toLocaleString()}` : '-'}
                             </td>
                           </tr>
@@ -3122,7 +3370,7 @@ export function Dashboard() {
                   setShowDrawerBreakdownModal(false);
                   navigate('/owner-account');
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors cursor-pointer"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Full Cash Flow & Record Handover</span>
@@ -3130,7 +3378,7 @@ export function Dashboard() {
               <button
                 type="button"
                 onClick={() => setShowDrawerBreakdownModal(false)}
-                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 text-xs font-bold transition cursor-pointer"
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-medium transition-colors cursor-pointer"
               >
                 Close
               </button>

@@ -1409,19 +1409,19 @@ export function OwnerAccount() {
       {/* Main On-Screen UI - COMPLETELY HIDDEN ON PRINT */}
       <div className="space-y-5 print:hidden">
         {/* Header Banner */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="card p-5">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                <Landmark className="w-6 h-6" />
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200/70 dark:border-amber-800/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Landmark className="w-5 h-5" />
               </div>
               <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl font-black text-slate-900 dark:text-slate-100 uppercase tracking-tight">
-                    {currentBranch?.name || 'Branch'} - Owner Account
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h1 className="text-lg font-display font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
+                    {currentBranch?.name || 'Branch'} — Owner Account
                   </h1>
-                  <span className="bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-urdu">
-                    {currentBranch?.name} کا کھاتہ
+                  <span className="text-xs font-medium text-amber-700 dark:text-amber-400 font-urdu">
+                    ({currentBranch?.name} کا کھاتہ)
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -1435,68 +1435,67 @@ export function OwnerAccount() {
               {activeTab === 'sale_type_dashboard' ? (
                 <button
                   onClick={() => setShowSaleTypeStatementPreview(true)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 text-xs font-bold transition shadow-sm cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors cursor-pointer"
                   title="Print Sale Type Comparison Report (In-Store vs Online Delivery)"
                 >
-                  <Printer className="w-4 h-4 text-indigo-600" />
-                  <span>Print Sale Type Report (پرنٹ سیل ٹائپ رپورٹ)</span>
+                  <Printer className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Print Sale Type Report</span>
                 </button>
               ) : activeTab === 'online_bills' ? (
                 <button
                   onClick={() => setShowOnlineStatementPreview(true)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 hover:bg-sky-100 text-xs font-bold transition shadow-sm cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors cursor-pointer"
                   title="Print dedicated Online Bills Received Payments Statement"
                 >
-                  <Printer className="w-4 h-4 text-sky-600" />
-                  <span>Print Online Bills Report (پرنٹ آن لائن بلز رپورٹ)</span>
+                  <Printer className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Print Online Bills Report</span>
                 </button>
               ) : (
                 <button
                   onClick={() => setShowStatementPreview(true)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs font-bold transition shadow-sm hover:border-slate-300 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors cursor-pointer"
                   title="Print full statement with running balance"
                 >
-                  <Printer className="w-4 h-4 text-sky-600" />
-                  <span>Print Statement (پرنٹ کھاتہ)</span>
+                  <Printer className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Print Statement</span>
                 </button>
               )}
 
               {/* Online Received Button */}
               <button
                 onClick={() => handleOpenOnlineReceived('Meezan Bank')}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition shadow-md shadow-sky-600/20 active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors cursor-pointer"
               >
-                <CreditCard className="w-4 h-4" />
-                <span>+ Online Received (آن لائن وصولی)</span>
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>+ Online Received</span>
               </button>
 
               {/* Cash Handover Button */}
               <button
                 onClick={handleOpenCashHandover}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow-md shadow-amber-600/20 active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
-                <span>+ Cash Handover (نقد کیش)</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Cash Handover</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Active Logged-In Branch & Real-time Drawer Cash Widget */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="card p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
-              <Building2 className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+              <Building2 className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-black uppercase text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <span>Branch Account:</span>
-                <span className="text-sm font-black text-amber-600 dark:text-amber-400">
+              <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 flex-wrap">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Branch Account:</span>
+                <span className="text-sm font-display font-semibold text-slate-900 dark:text-white">
                   {currentBranch?.name || 'Main Branch'}
                 </span>
-                <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-urdu font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  لاگ ان برانچ کھاتہ
+                <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-urdu font-medium">
+                  · لاگ ان برانچ کھاتہ
                 </span>
               </div>
               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-urdu">
@@ -1506,164 +1505,157 @@ export function OwnerAccount() {
           </div>
 
           {/* Real-time Opening Galla & Drawer Cash Widgets */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={() => {
                 setOpeningCashInput(todayOpeningGalla !== 0 ? todayOpeningGalla : (todayOpeningInfo.isManual ? 0 : ''));
                 setShowOpeningCashModal(true);
               }}
-              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-3.5 py-2.5 rounded-xl shadow-md border border-amber-400/30 cursor-pointer hover:scale-[1.02] transition"
+              className="flex items-center gap-2.5 bg-white dark:bg-[#0B1120] hover:bg-amber-50/50 dark:hover:bg-slate-800/80 text-slate-900 dark:text-slate-100 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer transition-colors"
               title="Click to set or edit daily opening cash balance (روزانہ کا پہلا پرانا گلہ)"
             >
-              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-bold">
-                <Coins className="w-4 h-4 text-white" />
+              <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Coins className="w-4 h-4" />
               </div>
               <div className="text-left">
-                <div className="text-[10px] uppercase font-bold text-amber-100 flex items-center gap-1">
+                <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                   <span>Opening Galla</span>
-                  <span className="font-urdu font-normal text-amber-200">(افتتاحی گلہ)</span>
                   {todayOpeningInfo.isAuto && (
-                    <span className="text-[8px] font-black uppercase bg-emerald-500 text-white px-1.5 py-0.2 rounded">AUTO</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">AUTO</span>
                   )}
                   {todayOpeningInfo.isManual && (
-                    <span className="text-[8px] font-black uppercase bg-white/25 text-white px-1.5 py-0.2 rounded">MANUAL</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">MANUAL</span>
                   )}
-                  <Edit2 className="w-3 h-3 text-amber-200 ml-0.5" />
+                  <Edit2 className="w-3 h-3 text-slate-400" />
                 </div>
-                <div className="text-lg font-black font-mono tracking-tight">
+                <div className="text-sm font-mono font-bold tabular-nums text-slate-900 dark:text-white">
                   PKR {todayOpeningGalla.toLocaleString()}
                 </div>
               </div>
             </button>
 
-            <div 
+            <button
+              type="button"
               onClick={() => setActiveTab('cash_flow')}
-              className="flex items-center gap-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-md border border-emerald-500/30 shrink-0 cursor-pointer hover:scale-[1.02] transition"
+              className="flex items-center gap-2.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shrink-0 cursor-pointer transition-colors"
               title="Today's Actual Galla / Cash in Drawer (آج کا اصل دراز کیش) - Click to view Cash Flow"
             >
-              <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center font-bold">
-                <Banknote className="w-5 h-5 text-white" />
+              <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                <Banknote className="w-4 h-4 text-white" />
               </div>
-              <div>
-                <div className="text-[10px] uppercase font-bold text-emerald-100 flex items-center gap-1.5">
+              <div className="text-left">
+                <div className="text-[11px] font-medium text-emerald-100 flex items-center gap-1.5">
                   <span>Today Actual Galla</span>
-                  <span className="font-urdu font-normal text-emerald-200">(آج کا دراز کیش)</span>
+                  <span className="font-urdu text-emerald-100/90">(آج کا دراز کیش)</span>
                 </div>
-                <div className="text-xl font-black font-mono tracking-tight">
+                <div className="text-base font-mono font-bold tabular-nums tracking-tight">
                   PKR {todayDrawerSummary.netDrawerCash.toLocaleString()}
                 </div>
               </div>
-            </div>
+            </button>
           </div>
         </div>
 
-        {/* Navigation Tabs Bar: Sale Type Dashboard, Online Bills, In-Store Bills, Cash Flow & Drawer Cash, All Records, Cash Handover, Bank & Wallets */}
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto">
-          {/* TAB 1: Sale Type Dashboard */}
+        {/* Navigation Tabs Bar */}
+        <div className="flex items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2.5 overflow-x-auto">
           <button
             onClick={() => { setActiveTab('sale_type_dashboard'); setSaleTypeSubFilter('all'); }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition whitespace-nowrap cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium text-xs transition-colors whitespace-nowrap cursor-pointer ${
               activeTab === 'sale_type_dashboard'
-                ? 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white shadow-md shadow-indigo-600/25 ring-2 ring-indigo-400/40'
-                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            <BarChart3 className="w-4 h-4 text-indigo-200" />
-            <span>Sale Type Dashboard (سیل ٹائپ ڈیش بورڈ)</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${activeTab === 'sale_type_dashboard' ? 'bg-white text-indigo-900' : 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'}`}>
-              In-Store vs Online
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Sale Type Dashboard</span>
+            <span className={`text-[11px] font-mono tabular-nums ${activeTab === 'sale_type_dashboard' ? 'text-blue-100' : 'text-slate-400'}`}>
+              · In-Store / Online
             </span>
           </button>
 
-          {/* TAB 2: Online Delivery Bills */}
           <button
             onClick={() => setActiveTab('online_bills')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition whitespace-nowrap cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium text-xs transition-colors whitespace-nowrap cursor-pointer ${
               activeTab === 'online_bills'
-                ? 'bg-sky-600 text-white shadow-md shadow-sky-600/25 ring-2 ring-sky-400/40'
-                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            <Globe className="w-4 h-4 text-sky-300" />
-            <span>Online Delivery Bills (آن لائن بلز)</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${activeTab === 'online_bills' ? 'bg-white text-sky-800' : 'bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300'}`}>
-              {onlineBillsList.length} Bills
+            <Globe className="w-3.5 h-3.5" />
+            <span>Online Delivery Bills</span>
+            <span className={`text-[11px] font-mono tabular-nums ${activeTab === 'online_bills' ? 'text-blue-100' : 'text-slate-400'}`}>
+              ({onlineBillsList.length})
             </span>
           </button>
 
-          {/* TAB 3: In-Store Bills */}
           <button
             onClick={() => { setActiveTab('instore_bills'); }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition whitespace-nowrap cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium text-xs transition-colors whitespace-nowrap cursor-pointer ${
               activeTab === 'instore_bills'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 ring-2 ring-emerald-400/40'
-                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            <Store className="w-4 h-4 text-emerald-300" />
-            <span>In-Store Bills (اسٹور بلز)</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${activeTab === 'instore_bills' ? 'bg-white text-emerald-800' : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'}`}>
-              {inStoreBillsList.length} Bills
+            <Store className="w-3.5 h-3.5" />
+            <span>In-Store Bills</span>
+            <span className={`text-[11px] font-mono tabular-nums ${activeTab === 'instore_bills' ? 'text-blue-100' : 'text-slate-400'}`}>
+              ({inStoreBillsList.length})
             </span>
           </button>
 
-          {/* TAB 4: Cash Flow & Drawer Cash */}
           <button
             onClick={() => setActiveTab('cash_flow')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition whitespace-nowrap cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium text-xs transition-colors whitespace-nowrap cursor-pointer ${
               activeTab === 'cash_flow'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 ring-2 ring-emerald-400/40'
-                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            <Banknote className="w-4 h-4 text-emerald-300" />
-            <span>Cash Flow & Drawer Cash (دراز کیش)</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${activeTab === 'cash_flow' ? 'bg-white text-emerald-900' : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'}`}>
-              PKR {todayDrawerSummary.netDrawerCash.toLocaleString()}
+            <Banknote className="w-3.5 h-3.5" />
+            <span>Cash Flow & Drawer</span>
+            <span className={`text-[11px] font-mono tabular-nums ${activeTab === 'cash_flow' ? 'text-emerald-100' : 'text-slate-400'}`}>
+              · PKR {todayDrawerSummary.netDrawerCash.toLocaleString()}
             </span>
           </button>
 
-          {/* TAB 4: All Transactions */}
           <button
             onClick={() => setActiveTab('all')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition whitespace-nowrap cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium text-xs transition-colors whitespace-nowrap cursor-pointer ${
               activeTab === 'all'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
-                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900'
+                : 'bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            <Landmark className="w-4 h-4" />
-            <span>All Transactions (تمام کھاتے)</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${activeTab === 'all' ? 'bg-black/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600'}`}>
-              {filteredList.length}
+            <Landmark className="w-3.5 h-3.5" />
+            <span>All Transactions</span>
+            <span className={`text-[11px] font-mono tabular-nums ${activeTab === 'all' ? 'opacity-80' : 'text-slate-400'}`}>
+              ({filteredList.length})
             </span>
           </button>
 
-          {/* TAB 5: Cash Handover */}
           <button
             onClick={() => { setActiveTab('cash_handover'); setTypeFilter('OUT'); }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition whitespace-nowrap cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium text-xs transition-colors whitespace-nowrap cursor-pointer ${
               activeTab === 'cash_handover'
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
-                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                ? 'bg-rose-600 text-white'
+                : 'bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            <Banknote className="w-4 h-4 text-rose-300" />
-            <span>Cash Handover (نقد کیش)</span>
+            <Banknote className="w-3.5 h-3.5" />
+            <span>Cash Handover</span>
           </button>
 
-          {/* TAB 6: Bank & Digital Wallets */}
           <button
             onClick={() => setActiveTab('bank_accounts')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition whitespace-nowrap cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium text-xs transition-colors whitespace-nowrap cursor-pointer ${
               activeTab === 'bank_accounts'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            <Building2 className="w-4 h-4 text-indigo-300" />
-            <span>Bank & Digital Wallets (بینک کھاتے)</span>
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Bank & Digital Wallets</span>
           </button>
         </div>
 
