@@ -8,7 +8,7 @@ import { Link, useNavigate } from 'react-router';
 import { Settings, Save, X, Calendar, Lock, Eye, EyeOff, Printer, TrendingDown, Receipt, ExternalLink, Search, Coins, Edit2, Banknote, ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { startOfMonth, endOfMonth, startOfDay, parse, format, isValid } from 'date-fns';
-import { calculateCashDrawer } from '../lib/cashDrawer';
+import { calculateCashDrawer, resolveOpeningGallaForDate } from '../lib/cashDrawer';
 
 const safeFormat = (date: any, formatStr: string) => {
   if (!date) return '';
@@ -82,8 +82,6 @@ export function Dashboard() {
     return () => unsubOpening();
   }, [resolvedBranchId]);
 
-  const todayOpeningBalance = dailyOpeningBalances[selectedDailyDateStr] || 0;
-
   const handleSaveDailyOpeningBalance = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingOpeningCash(true);
@@ -108,11 +106,30 @@ export function Dashboard() {
           updatedBy: user?.name || 'Admin'
         });
       }
-      toast.success('Opening Galla Balance Saved!');
+      toast.success('Opening Galla Balance Saved! Auto carry-forward active for next days.');
       setShowOpeningCashModal(false);
     } catch (err: any) {
       console.error('Error saving opening balance:', err);
       toast.error('Failed to save opening balance: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsSavingOpeningCash(false);
+    }
+  };
+
+  const handleRevertOpeningToAuto = async () => {
+    setIsSavingOpeningCash(true);
+    try {
+      const bId = resolvedBranchId || 'main';
+      const qExist = query(collection(db, 'dailyOpeningCash'), where('branchId', '==', bId), where('date', '==', selectedDailyDateStr));
+      const snap = await safeGetDocs(qExist);
+      for (const dDoc of snap.docs) {
+        await deleteDoc(doc(db, 'dailyOpeningCash', dDoc.id));
+      }
+      toast.success('Reverted to Auto Carry-Forward from previous day Actual Galla!');
+      setShowOpeningCashModal(false);
+    } catch (err: any) {
+      console.error('Error reverting opening balance:', err);
+      toast.error('Failed to revert: ' + (err?.message || 'Unknown error'));
     } finally {
       setIsSavingOpeningCash(false);
     }
@@ -938,6 +955,21 @@ export function Dashboard() {
     if (isSaleOnDate(pDate)) dailyPurchasesValue += amount;
   });
 
+  // Dynamic Opening Galla (starts auto carry-forward only after first manual entry exists)
+  const openingGallaInfo = React.useMemo(() => {
+    return resolveOpeningGallaForDate({
+      targetDateStr: selectedDailyDateStr,
+      dailyOpeningBalances,
+      sales,
+      ledgerEntries,
+      ownerTransactions,
+      branchId: resolvedBranchId,
+      fallbackBranchId: branches[0]?.id || 'main',
+    });
+  }, [selectedDailyDateStr, dailyOpeningBalances, sales, ledgerEntries, ownerTransactions, resolvedBranchId, branches]);
+
+  const todayOpeningBalance = openingGallaInfo.openingGalla;
+
   // Actual Galla / Drawer Cash Calculation (DAILY DRAWER CASH - strictly for selected daily date)
   const drawerSummary = React.useMemo(() => {
     return calculateCashDrawer({
@@ -945,11 +977,14 @@ export function Dashboard() {
       ledgerEntries,
       ownerTransactions,
       openingGalla: todayOpeningBalance,
+      openingGallaDescription: openingGallaInfo.isAuto && openingGallaInfo.previousDateStr
+        ? `Auto Carry-Forward from ${openingGallaInfo.previousDateStr} Actual Galla`
+        : 'Manual Opening Galla Balance',
       branchId: resolvedBranchId,
       fallbackBranchId: branches[0]?.id || 'main',
       isWithinDate: (ts) => isSaleOnDate(ts, selectedDailyDateStr),
     });
-  }, [sales, ledgerEntries, ownerTransactions, todayOpeningBalance, resolvedBranchId, branches, selectedDailyDateStr]);
+  }, [sales, ledgerEntries, ownerTransactions, todayOpeningBalance, openingGallaInfo, resolvedBranchId, branches, selectedDailyDateStr]);
 
   const netDrawerCash = drawerSummary.netDrawerCash;
 
@@ -993,7 +1028,7 @@ export function Dashboard() {
             <button
               type="button"
               onClick={() => {
-                setOpeningCashInput(todayOpeningBalance || '');
+                setOpeningCashInput(todayOpeningBalance !== 0 ? todayOpeningBalance : (openingGallaInfo.isManual ? 0 : ''));
                 setShowOpeningCashModal(true);
               }}
               className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-3.5 py-1.5 rounded-lg font-bold text-xs shadow-sm transition cursor-pointer border border-amber-400/40"
@@ -1002,6 +1037,16 @@ export function Dashboard() {
               <Coins className="w-4 h-4 text-amber-100" />
               <span>Opening Galla (افتتاحی گلہ):</span>
               <span className="font-mono text-sm font-black">PKR {todayOpeningBalance.toLocaleString()}</span>
+              {openingGallaInfo.isAuto && (
+                <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-500/90 text-white px-1.5 py-0.5 rounded">
+                  AUTO
+                </span>
+              )}
+              {openingGallaInfo.isManual && (
+                <span className="text-[9px] font-black uppercase tracking-wider bg-white/25 text-white px-1.5 py-0.5 rounded">
+                  MANUAL
+                </span>
+              )}
               <Edit2 className="w-3.5 h-3.5 text-amber-200 ml-0.5" />
             </button>
 
@@ -2787,14 +2832,34 @@ export function Dashboard() {
             </div>
 
             <form onSubmit={handleSaveDailyOpeningBalance} className="space-y-4">
-              <div className="bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200">
-                <div className="flex justify-between font-bold mb-1">
+              <div className="bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
+                <div className="flex justify-between font-bold">
                   <span>Branch: {currentBranch?.name || 'Main Branch'}</span>
                   <span>Date: {selectedDailyDateStr}</span>
                 </div>
-                <p className="text-[11px] font-urdu text-amber-800 dark:text-amber-300">
-                  یہ ابتدائی گلہ کی رقم آج کے کاؤنٹر دراز کیش (Drawer Cash) میں خودبخود شامل ہو جائے گی۔
-                </p>
+                {!openingGallaInfo.isActive ? (
+                  <p className="text-[11px] font-urdu text-amber-800 dark:text-amber-300">
+                    پہلی بار Manual Opening Galla درج کریں — اس کے بعد اگلے دن سے پچھلے دن کا Actual Galla خودبخود اگلے دن کے Opening Galla میں شامل ہوتا رہے گا۔
+                  </p>
+                ) : openingGallaInfo.isAuto ? (
+                  <div className="bg-emerald-100/80 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-lg p-2 text-[11px] text-emerald-900 dark:text-emerald-200">
+                    <div className="font-bold">
+                      Auto Carry-Forward Active (Anchor: {openingGallaInfo.anchorDate})
+                    </div>
+                    <div className="font-urdu mt-0.5">
+                      گزشتہ روز ({openingGallaInfo.previousDateStr}) کا Actual Galla (PKR {openingGallaInfo.openingGalla.toLocaleString()}) خودبخود شامل ہوا ہے۔ تبدیل کرنے کے لیے نیچے نئی رقم محفوظ کریں۔
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-sky-100/70 dark:bg-sky-950/50 border border-sky-300 dark:border-sky-800 rounded-lg p-2 text-[11px] text-sky-900 dark:text-sky-200">
+                    <div className="font-bold">
+                      Manual Entry Saved for {selectedDailyDateStr}
+                    </div>
+                    <div className="font-urdu mt-0.5">
+                      اس دن کے اختتامی Actual Galla سے اگلے دن کا Opening Galla خودبخود چلتا رہے گا۔
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -2829,22 +2894,36 @@ export function Dashboard() {
                 ))}
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowOpeningCashModal(false)}
-                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingOpeningCash}
-                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md transition-all disabled:opacity-50 flex items-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  {isSavingOpeningCash ? 'Saving...' : 'Save Opening Galla'}
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <div>
+                  {openingGallaInfo.isManual && openingGallaInfo.hasEarlierAnchor && (
+                    <button
+                      type="button"
+                      disabled={isSavingOpeningCash}
+                      onClick={handleRevertOpeningToAuto}
+                      className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition-colors disabled:opacity-50"
+                    >
+                      Revert to Auto
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowOpeningCashModal(false)}
+                    className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingOpeningCash}
+                    className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSavingOpeningCash ? 'Saving...' : 'Save Opening Galla'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -2883,12 +2962,20 @@ export function Dashboard() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
                 <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60">
                   <div className="flex items-center justify-between text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase">
-                    <span>1. Opening Galla (+)</span>
+                    <span className="flex items-center gap-1">
+                      <span>1. Opening Galla (+)</span>
+                      {openingGallaInfo.isAuto && (
+                        <span className="bg-emerald-600 text-white px-1 py-0.2 rounded text-[8px]">AUTO</span>
+                      )}
+                      {openingGallaInfo.isManual && (
+                        <span className="bg-amber-600 text-white px-1 py-0.2 rounded text-[8px]">MANUAL</span>
+                      )}
+                    </span>
                     <button
                       type="button"
                       onClick={() => {
                         setShowDrawerBreakdownModal(false);
-                        setOpeningCashInput(todayOpeningBalance || '');
+                        setOpeningCashInput(todayOpeningBalance !== 0 ? todayOpeningBalance : (openingGallaInfo.isManual ? 0 : ''));
                         setShowOpeningCashModal(true);
                       }}
                       className="underline hover:text-amber-900"
@@ -2899,7 +2986,11 @@ export function Dashboard() {
                   <div className="text-base font-black font-mono text-amber-800 dark:text-amber-200 mt-1">
                     PKR {drawerSummary.openingGalla.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-amber-700/80 font-urdu">افتتاحی گلہ</div>
+                  <div className="text-[10px] text-amber-700/80 font-urdu">
+                    {openingGallaInfo.isAuto && openingGallaInfo.previousDateStr
+                      ? `گزشتہ روز (${openingGallaInfo.previousDateStr}) سے خودکار`
+                      : 'افتتاحی گلہ'}
+                  </div>
                 </div>
 
                 <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60">

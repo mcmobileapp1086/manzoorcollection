@@ -55,11 +55,45 @@ function hasBankKeyword(text: string): boolean {
   return BANK_OR_ONLINE_KEYWORDS.some(k => lower.includes(k));
 }
 
+export interface OpeningGallaResolution {
+  openingGalla: number;
+  isAuto: boolean;
+  isManual: boolean;
+  isActive: boolean;
+  anchorDate: string | null;
+  previousDateStr: string | null;
+  previousActualGalla: number | null;
+  hasEarlierAnchor: boolean;
+}
+
+const DATE_STR_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+export function toLocalDateStr(ts: number): string {
+  if (!ts || isNaN(ts)) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '';
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+export function addDaysToDateStr(dateStr: string, days: number): string {
+  if (!DATE_STR_REGEX.test(dateStr)) return dateStr;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days, 12, 0, 0, 0);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
 export function calculateCashDrawer(params: {
   sales: any[];
   ledgerEntries: any[];
   ownerTransactions: any[];
   openingGalla: number;
+  openingGallaDescription?: string;
   branchId?: string | null;
   fallbackBranchId?: string;
   isWithinDate: (ts: number) => boolean;
@@ -69,6 +103,7 @@ export function calculateCashDrawer(params: {
     ledgerEntries,
     ownerTransactions,
     openingGalla,
+    openingGallaDescription,
     branchId,
     fallbackBranchId = 'main',
     isWithinDate,
@@ -86,7 +121,7 @@ export function calculateCashDrawer(params: {
   let shopCashExpenses = 0;
   const rows: CashDrawerLedgerRow[] = [];
 
-  if (openingGalla > 0) {
+  if (openingGalla !== 0) {
     rows.push({
       id: 'opening-galla',
       date: 0,
@@ -94,9 +129,9 @@ export function calculateCashDrawer(params: {
       label: 'Opening Galla (+)',
       urduLabel: 'ابتدائی گلہ',
       voucherNo: 'OPENING',
-      description: 'Daily Opening Galla Balance',
-      inflow: openingGalla,
-      outflow: 0,
+      description: openingGallaDescription || 'Daily Opening Galla Balance',
+      inflow: openingGalla > 0 ? openingGalla : 0,
+      outflow: openingGalla < 0 ? Math.abs(openingGalla) : 0,
     });
   }
 
@@ -318,3 +353,147 @@ export function calculateCashDrawer(params: {
     rows,
   };
 }
+
+/**
+ * Resolves the Opening Galla for a given target date (`YYYY-MM-DD`).
+ *
+ * Rule:
+ * - Auto carry-forward ONLY starts once at least one manual Opening Galla has been added
+ *   for the branch on or before `targetDateStr`.
+ * - Before any manual entry exists, returns `openingGalla: 0` (`isActive: false`).
+ * - If `targetDateStr` itself has a manual entry, returns that exact manual value (`isManual: true`).
+ * - For subsequent days after the most recent manual anchor `anchorDate < targetDateStr`,
+ *   automatically carries forward each day's closing Actual Galla (`netDrawerCash`) to the
+ *   next day's Opening Galla day-by-day up to `targetDateStr`.
+ */
+export function resolveOpeningGallaForDate(params: {
+  targetDateStr: string;
+  dailyOpeningBalances: Record<string, number>;
+  sales: any[];
+  ledgerEntries: any[];
+  ownerTransactions: any[];
+  branchId?: string | null;
+  fallbackBranchId?: string;
+}): OpeningGallaResolution {
+  const {
+    targetDateStr,
+    dailyOpeningBalances,
+    sales,
+    ledgerEntries,
+    ownerTransactions,
+    branchId,
+    fallbackBranchId = 'main',
+  } = params;
+
+  const emptyResult: OpeningGallaResolution = {
+    openingGalla: 0,
+    isAuto: false,
+    isManual: false,
+    isActive: false,
+    anchorDate: null,
+    previousDateStr: null,
+    previousActualGalla: null,
+    hasEarlierAnchor: false,
+  };
+
+  if (!targetDateStr || !DATE_STR_REGEX.test(targetDateStr)) {
+    return emptyResult;
+  }
+
+  const eligibleManualDates = Object.keys(dailyOpeningBalances || {})
+    .filter(d => DATE_STR_REGEX.test(d) && d <= targetDateStr)
+    .sort();
+
+  if (eligibleManualDates.length === 0) {
+    return emptyResult;
+  }
+
+  const anchorDate = eligibleManualDates[eligibleManualDates.length - 1];
+  const hasEarlierAnchor = eligibleManualDates.some(d => d < targetDateStr);
+
+  if (anchorDate === targetDateStr) {
+    return {
+      openingGalla: Number(dailyOpeningBalances[targetDateStr]) || 0,
+      isAuto: false,
+      isManual: true,
+      isActive: true,
+      anchorDate,
+      previousDateStr: null,
+      previousActualGalla: null,
+      hasEarlierAnchor,
+    };
+  }
+
+  const matchesBranch = (itemBranch?: string) => {
+    if (!branchId) return true;
+    return (itemBranch || fallbackBranchId) === branchId;
+  };
+
+  const bucketByDate = (items: any[]) => {
+    const map = new Map<string, any[]>();
+    for (const item of items) {
+      if (!matchesBranch(item.branchId)) continue;
+      const dStr = toLocalDateStr(getRecordTime(item));
+      if (!dStr || dStr < anchorDate || dStr >= targetDateStr) continue;
+      let list = map.get(dStr);
+      if (!list) {
+        list = [];
+        map.set(dStr, list);
+      }
+      list.push(item);
+    }
+    return map;
+  };
+
+  const salesByDate = bucketByDate(sales);
+  const ledgerByDate = bucketByDate(ledgerEntries);
+  const ownerTxByDate = bucketByDate(ownerTransactions);
+
+  let currDate = anchorDate;
+  let runningOpening = Number(dailyOpeningBalances[anchorDate]) || 0;
+  let steps = 0;
+
+  while (currDate < targetDateStr && steps < 3660) {
+    const daySummary = calculateCashDrawer({
+      sales: salesByDate.get(currDate) || [],
+      ledgerEntries: ledgerByDate.get(currDate) || [],
+      ownerTransactions: ownerTxByDate.get(currDate) || [],
+      openingGalla: runningOpening,
+      branchId,
+      fallbackBranchId,
+      isWithinDate: () => true,
+    });
+
+    const closing = daySummary.netDrawerCash;
+    const nextDate = addDaysToDateStr(currDate, 1);
+
+    if (nextDate >= targetDateStr) {
+      return {
+        openingGalla: closing,
+        isAuto: true,
+        isManual: false,
+        isActive: true,
+        anchorDate,
+        previousDateStr: currDate,
+        previousActualGalla: closing,
+        hasEarlierAnchor: true,
+      };
+    }
+
+    runningOpening = closing;
+    currDate = nextDate;
+    steps++;
+  }
+
+  return {
+    openingGalla: runningOpening,
+    isAuto: true,
+    isManual: false,
+    isActive: true,
+    anchorDate,
+    previousDateStr: currDate,
+    previousActualGalla: runningOpening,
+    hasEarlierAnchor: true,
+  };
+}
+
