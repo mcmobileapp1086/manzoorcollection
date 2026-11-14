@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
 import { useSettings } from '../context/SettingsContext';
-import { collection, where, orderBy, limit, addDoc, setDoc, updateDoc, deleteDoc, getDocs, getDoc, runTransaction, writeBatch, onSnapshot, query } from '../lib/customFirestore';
+import { collection, where, orderBy, limit, addDoc, setDoc, updateDoc, deleteDoc, getDocs, getDoc, runTransaction, writeBatch, onSnapshot, query, doc } from '../lib/customFirestore';
 import { db, safeGetDocs, safeCollectionSnapshot } from '../lib/firebase';
 import { Link, useNavigate } from 'react-router';
-import { Settings, Save, X, Calendar, Lock, Eye, EyeOff, Printer, TrendingDown, Receipt, ExternalLink, Search } from 'lucide-react';
+import { Settings, Save, X, Calendar, Lock, Eye, EyeOff, Printer, TrendingDown, Receipt, ExternalLink, Search, Coins, Edit2, Banknote, ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { startOfMonth, endOfMonth, startOfDay, parse, format, isValid } from 'date-fns';
+import { calculateCashDrawer } from '../lib/cashDrawer';
 
 const safeFormat = (date: any, formatStr: string) => {
   if (!date) return '';
@@ -42,6 +44,7 @@ export function Dashboard() {
   const [vendors, setVendors] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<any[]>([]);
+  const [ownerTransactions, setOwnerTransactions] = useState<any[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
   const [onlineEmployees, setOnlineEmployees] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +54,69 @@ export function Dashboard() {
   const todayDateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
   const [selectedDailyDateStr, setSelectedDailyDateStr] = useState<string>(todayDateStr);
   const [selectedMonthStr, setSelectedMonthStr] = useState(`${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`);
+
+  // Daily Opening Galla Balance State
+  const [dailyOpeningBalances, setDailyOpeningBalances] = useState<Record<string, number>>({});
+  const [showOpeningCashModal, setShowOpeningCashModal] = useState(false);
+  const [showDrawerBreakdownModal, setShowDrawerBreakdownModal] = useState(false);
+  const [openingCashInput, setOpeningCashInput] = useState<number | ''>('');
+  const [isSavingOpeningCash, setIsSavingOpeningCash] = useState(false);
+
+  const resolvedBranchId = activeBranchId || currentBranch?.id || user?.branchId || 'main';
+
+  useEffect(() => {
+    let qOpening: any = collection(db, 'dailyOpeningCash');
+    if (resolvedBranchId) {
+      qOpening = query(qOpening, where('branchId', '==', resolvedBranchId));
+    }
+    const unsubOpening = safeCollectionSnapshot(qOpening, (snap) => {
+      const map: Record<string, number> = {};
+      snap.docs.forEach(d => {
+        const data = d.data() as any;
+        if (data.date && data.openingBalance !== undefined) {
+          map[data.date] = Number(data.openingBalance) || 0;
+        }
+      });
+      setDailyOpeningBalances(map);
+    });
+    return () => unsubOpening();
+  }, [resolvedBranchId]);
+
+  const todayOpeningBalance = dailyOpeningBalances[selectedDailyDateStr] || 0;
+
+  const handleSaveDailyOpeningBalance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingOpeningCash(true);
+    try {
+      const val = Number(openingCashInput) || 0;
+      const bId = resolvedBranchId || 'main';
+      const qExist = query(collection(db, 'dailyOpeningCash'), where('branchId', '==', bId), where('date', '==', selectedDailyDateStr));
+      const snap = await safeGetDocs(qExist);
+      if (snap.docs.length > 0) {
+        await updateDoc(doc(db, 'dailyOpeningCash', snap.docs[0].id), {
+          openingBalance: val,
+          updatedAt: Date.now(),
+          updatedBy: user?.name || 'Admin'
+        });
+      } else {
+        await addDoc(collection(db, 'dailyOpeningCash'), {
+          branchId: bId,
+          date: selectedDailyDateStr,
+          openingBalance: val,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          updatedBy: user?.name || 'Admin'
+        });
+      }
+      toast.success('Opening Galla Balance Saved!');
+      setShowOpeningCashModal(false);
+    } catch (err: any) {
+      console.error('Error saving opening balance:', err);
+      toast.error('Failed to save opening balance: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsSavingOpeningCash(false);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -63,11 +129,13 @@ export function Dashboard() {
     let qVendors: any = collection(db, 'vendors');
     let qCustomers: any = collection(db, 'customers');
     let qLedger: any = collection(db, 'ledger');
+    let qOwnerTx: any = collection(db, 'ownerTransactions');
         
     if (activeBranchId) {
       qSales = query(qSales, where('branchId', '==', activeBranchId));
       qInv = query(qInv, where('branchId', '==', activeBranchId));
       qLedger = query(qLedger, where('branchId', '==', activeBranchId));
+      qOwnerTx = query(qOwnerTx, where('branchId', '==', activeBranchId));
     }
     
     const tenantId = user?.tenantId || user?.uid;
@@ -128,6 +196,10 @@ export function Dashboard() {
       checkAllLoaded();
     });
 
+    const unsubOwnerTx = safeCollectionSnapshot(qOwnerTx, (snap) => {
+      setOwnerTransactions(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
+    });
+
     let qPurchases: any = collection(db, 'purchases');
     if (tenantId) {
       qPurchases = query(qPurchases, where('tenantId', '==', tenantId));
@@ -178,6 +250,7 @@ export function Dashboard() {
       unsubVendors();
       unsubCustomers();
       unsubLedger();
+      unsubOwnerTx();
       unsubPurchases();
     };
   }, [user, activeBranchId]);
@@ -865,6 +938,21 @@ export function Dashboard() {
     if (isSaleOnDate(pDate)) dailyPurchasesValue += amount;
   });
 
+  // Actual Galla / Drawer Cash Calculation (DAILY DRAWER CASH - strictly for selected daily date)
+  const drawerSummary = React.useMemo(() => {
+    return calculateCashDrawer({
+      sales,
+      ledgerEntries,
+      ownerTransactions,
+      openingGalla: todayOpeningBalance,
+      branchId: resolvedBranchId,
+      fallbackBranchId: branches[0]?.id || 'main',
+      isWithinDate: (ts) => isSaleOnDate(ts, selectedDailyDateStr),
+    });
+  }, [sales, ledgerEntries, ownerTransactions, todayOpeningBalance, resolvedBranchId, branches, selectedDailyDateStr]);
+
+  const netDrawerCash = drawerSummary.netDrawerCash;
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Main on-screen Dashboard UI (hidden in print when monthly sale modal is printing) */}
@@ -901,6 +989,34 @@ export function Dashboard() {
             <p className="text-sm text-slate-500 dark:text-slate-400">Real-time business statistics</p>
           </div>
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            {/* Daily Opening Galla Box */}
+            <button
+              type="button"
+              onClick={() => {
+                setOpeningCashInput(todayOpeningBalance || '');
+                setShowOpeningCashModal(true);
+              }}
+              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-3.5 py-1.5 rounded-lg font-bold text-xs shadow-sm transition cursor-pointer border border-amber-400/40"
+              title="Click to set or edit daily opening cash balance (روزانہ کا ابتدائی گلہ)"
+            >
+              <Coins className="w-4 h-4 text-amber-100" />
+              <span>Opening Galla (افتتاحی گلہ):</span>
+              <span className="font-mono text-sm font-black">PKR {todayOpeningBalance.toLocaleString()}</span>
+              <Edit2 className="w-3.5 h-3.5 text-amber-200 ml-0.5" />
+            </button>
+
+            {/* Actual Galla / Drawer Cash Indicator */}
+            <button
+              type="button"
+              onClick={() => setShowDrawerBreakdownModal(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-3.5 py-1.5 rounded-lg font-bold text-xs shadow-sm hover:from-emerald-700 hover:to-teal-700 transition cursor-pointer"
+              title="Actual Galla / Cash in Drawer (اصل دراز کیش) - Click to view full breakdown"
+            >
+              <div className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
+              <span>Actual Galla (دراز کیش):</span>
+              <span className="font-mono text-sm font-black">PKR {netDrawerCash.toLocaleString()}</span>
+            </button>
+
             {/* Daily Date Selector */}
             <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/70 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
               <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 pl-2 flex items-center gap-1">
@@ -976,39 +1092,39 @@ export function Dashboard() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
                                         {/* Daily Sale */}
-        <div onClick={() => handleBoxClick("daily-sale")} className={`card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
+        <div onClick={() => handleBoxClick("daily-sale")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
           <div>
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Daily Sale</h3>
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(dailySales)}</div>
             <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
               {formatDate(parse(selectedDailyDateStr, 'yyyy-MM-dd', new Date()).getTime())}
               {selectedDailyDateStr === todayDateStr ? ' (TODAY)' : ''}
             </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
               <div className="text-[10px] sm:text-xs font-bold text-indigo-700 bg-indigo-50 dark:bg-indigo-950/60 dark:text-indigo-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">{dailySuits} Suits ({dailyBills} Bills)</div>
-              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">In-Store: PKR {formatCurrency(dailyInStoreSales)}</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Online: PKR {formatCurrency(dailyOnlineSales)}</div>
+              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">In-Store: PKR {formatCurrency(dailyInStoreSales)}</div>
+              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(dailyOnlineSales)}</div>
             </div>
           </div>
         </div>
         {/* Daily Profit */}
         {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'new_limited_access' && user?.role !== 'cashier' && (
-        <div onClick={() => handleBoxClick("daily-profit")} className={`card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
+        <div onClick={() => handleBoxClick("daily-profit")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
           <div className="flex items-center justify-between">
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Daily Profit</h3>
             <Lock className="w-3.5 h-3.5 text-amber-500/80" />
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(dailyProfit)}</div>
             <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
               {formatDate(parse(selectedDailyDateStr, 'yyyy-MM-dd', new Date()).getTime())}
               {selectedDailyDateStr === todayDateStr ? ' (TODAY)' : ''}
             </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
-              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">In-Store: PKR {formatCurrency(dailyInStoreProfit)}</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Online: PKR {formatCurrency(dailyOnlineProfit)}</div>
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
+              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">In-Store: PKR {formatCurrency(dailyInStoreProfit)}</div>
+              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(dailyOnlineProfit)}</div>
             </div>
           </div>
         </div>
@@ -1017,18 +1133,18 @@ export function Dashboard() {
         {user?.role !== 'sales_stock_only' && user?.role !== 'limited_access' && (
         <div 
           onClick={() => handleBoxClick("daily-expense")} 
-          className="card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-200"
+          className="card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-200"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-1">
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1.5">
-              <TrendingDown className="w-4 h-4 text-rose-500" />
+              <TrendingDown className="w-4 h-4 text-rose-500 shrink-0" />
               <span>Daily Expense</span>
             </h3>
-            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">
+            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800 shrink-0">
               آج کا خرچہ
             </span>
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className={`text-lg sm:text-3xl font-extrabold ${dailyExpenses > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-100'}`}>
               PKR {formatCurrency(dailyExpenses)}
             </div>
@@ -1036,7 +1152,7 @@ export function Dashboard() {
               {formatDate(parse(selectedDailyDateStr, 'yyyy-MM-dd', new Date()).getTime())}
               {selectedDailyDateStr === todayDateStr ? ' (TODAY)' : ''}
             </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
               <div className="text-[10px] sm:text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
                 {dailyExpenseEntries.length} Items ({dailyExpenses > 0 ? 'Recorded' : 'Zero'})
               </div>
@@ -1051,25 +1167,25 @@ export function Dashboard() {
         {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && (
         <div 
           onClick={() => { setLossModalFilter('daily'); handleBoxClick("loss-suites"); }} 
-          className="card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-rose-200 dark:border-rose-950/60 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-300"
+          className="card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-rose-200 dark:border-rose-950/60 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-300"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-1">
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1.5">
-              <TrendingDown className="w-4 h-4 text-rose-600" />
-              <span>Daily Loss Suites & Bills</span>
+              <TrendingDown className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>Daily Loss Bills</span>
             </h3>
-            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">
-              نقصان والے سوٹس
+            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800 shrink-0">
+              آج کا نقصان
             </span>
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className={`text-lg sm:text-3xl font-extrabold ${dailyLoss > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-100'}`}>
               PKR {formatCurrency(dailyLoss)}
             </div>
             <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
               {formatDate(parse(selectedDailyDateStr, 'yyyy-MM-dd', new Date()).getTime())} {selectedDailyDateStr === todayDateStr ? '(TODAY)' : ''}
             </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
               <div className="text-[10px] sm:text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
                 {dailyLossBills} Loss Bills ({dailyLossSuits} Suits)
               </div>
@@ -1082,33 +1198,33 @@ export function Dashboard() {
         )}
         {/* Monthly Sale */}
         {user?.role !== 'sales_stock_only' && user?.role !== 'cashier' && user?.role !== 'limited_access' && (
-        <div onClick={() => handleBoxClick("monthly-sale")} className={`card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
+        <div onClick={() => handleBoxClick("monthly-sale")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
           <div>
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Monthly Sale</h3>
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(monthlySales)}</div>
-            {lastMonthlyBillDate && (<span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">{lastMonthlyBillDate}</span>)}
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
+            <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">{lastMonthlyBillDate || formatMonthName(selectedMonthStr)}</span>
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
               <div className="text-[10px] sm:text-xs font-bold text-purple-700 bg-purple-50 dark:bg-purple-950/60 dark:text-purple-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">{monthlySuits} Suits ({monthlyBills} Bills)</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Online: PKR {formatCurrency(monthlyOnlineSales)}</div>
+              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(monthlyOnlineSales)}</div>
             </div>
           </div>
         </div>
         )}
         {/* Monthly Profit */}
         {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'new_limited_access' && user?.role !== 'cashier' && (
-        <div onClick={() => handleBoxClick("monthly-profit")} className={`card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
+        <div onClick={() => handleBoxClick("monthly-profit")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
           <div className="flex items-center justify-between">
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Monthly Profit</h3>
             <Lock className="w-3.5 h-3.5 text-amber-500/80" />
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(monthlyProfit)}</div>
-            {lastMonthlyBillDate && (<span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">{lastMonthlyBillDate}</span>)}
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
-              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Sales: PKR {formatCurrency(monthlySales)}</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Online: PKR {formatCurrency(monthlyOnlineProfit)}</div>
+            <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">{lastMonthlyBillDate || formatMonthName(selectedMonthStr)}</span>
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
+              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Sales: PKR {formatCurrency(monthlySales)}</div>
+              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(monthlyOnlineProfit)}</div>
             </div>
           </div>
         </div>
@@ -1117,25 +1233,25 @@ export function Dashboard() {
         {user?.role !== 'sales_stock_only' && user?.role !== 'limited_access' && (
         <div 
           onClick={() => handleBoxClick("monthly-expense")} 
-          className="card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-200"
+          className="card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-200"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-1">
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1.5">
-              <Receipt className="w-4 h-4 text-rose-500" />
+              <Receipt className="w-4 h-4 text-rose-500 shrink-0" />
               <span>Monthly Expense</span>
             </h3>
-            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">
+            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800 shrink-0">
               اس ماہ کا خرچہ
             </span>
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className={`text-lg sm:text-3xl font-extrabold ${monthlyExpenses > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-100'}`}>
               PKR {formatCurrency(monthlyExpenses)}
             </div>
             <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
               {formatMonthName(selectedMonthStr)}
             </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
               <div className="text-[10px] sm:text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
                 {monthlyExpenseEntries.length} Items ({formatMonthName(selectedMonthStr)})
               </div>
@@ -1150,30 +1266,30 @@ export function Dashboard() {
         {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && (
         <div 
           onClick={() => { setLossModalFilter('monthly'); handleBoxClick("loss-suites"); }} 
-          className="card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-rose-200 dark:border-rose-950/60 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-300"
+          className="card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-rose-200 dark:border-rose-950/60 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-300"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-1">
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-rose-600 dark:text-rose-400 uppercase flex items-center gap-1.5">
-              <TrendingDown className="w-4 h-4 text-rose-600" />
-              <span>Monthly Loss Suites & Bills</span>
+              <TrendingDown className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>Monthly Loss Bills</span>
             </h3>
-            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">
+            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800 shrink-0">
               اس ماہ کا نقصان
             </span>
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className={`text-lg sm:text-3xl font-extrabold ${monthlyLoss > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-100'}`}>
               PKR {formatCurrency(monthlyLoss)}
             </div>
             <span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">
               {formatMonthName(selectedMonthStr)}
             </span>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
               <div className="text-[10px] sm:text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
                 {monthlyLossBills} Loss Bills ({monthlyLossSuits} Suits)
               </div>
-              <div className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
-                Monthly Breakdown
+              <div className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
+                All Time: PKR {formatCurrency(totalLoss)} ({totalLossBills})
               </div>
             </div>
           </div>
@@ -1181,33 +1297,33 @@ export function Dashboard() {
         )}
         {/* Total Revenue */}
         {((user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'cashier') || user?.role === 'new_limited_access') && (
-        <div onClick={() => handleBoxClick("total-sale")} className={`card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
+        <div onClick={() => handleBoxClick("total-sale")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
           <div>
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Total Revenue</h3>
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(totalSales)}</div>
             {lastTotalBillDate && (<span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">{lastTotalBillDate}</span>)}
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
               <div className="text-[10px] sm:text-xs font-bold text-indigo-700 bg-indigo-50 dark:bg-indigo-950/60 dark:text-indigo-300 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">{totalSuits} Suits ({totalBills} Bills)</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Online: PKR {formatCurrency(totalOnlineSales)}</div>
+              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(totalOnlineSales)}</div>
             </div>
           </div>
         </div>
         )}
         {/* Overall Profit */}
         {user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'new_limited_access' && user?.role !== 'cashier' && (
-        <div onClick={() => handleBoxClick("total-profit")} className={`card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
+        <div onClick={() => handleBoxClick("total-profit")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
           <div className="flex items-center justify-between">
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Overall Profit</h3>
             <Lock className="w-3.5 h-3.5 text-amber-500/80" />
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(totalProfit)}</div>
             {lastTotalBillDate && (<span className="block text-[9px] sm:text-[10px] font-bold text-slate-400 mb-1 mt-1 tracking-wider uppercase">{lastTotalBillDate}</span>)}
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
-              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Sales: PKR {formatCurrency(totalSales)}</div>
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Online: PKR {formatCurrency(totalOnlineProfit)}</div>
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
+              <div className="text-[10px] sm:text-xs font-medium text-emerald-600 bg-emerald-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Sales: PKR {formatCurrency(totalSales)}</div>
+              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Online: PKR {formatCurrency(totalOnlineProfit)}</div>
             </div>
           </div>
         </div>
@@ -1215,15 +1331,15 @@ export function Dashboard() {
 
         {/* Stock Value */}
         {((user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'cashier') || user?.role === 'new_limited_access') && (
-        <div onClick={() => handleBoxClick("stock")} className={`card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
+        <div onClick={() => handleBoxClick("stock")} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-sky-200`}>
           <div>
             <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Stock Value</h3>
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className="text-lg sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100">PKR {formatCurrency(stockValue)}</div>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
-              <div className="text-[10px] sm:text-xs font-medium text-purple-600 bg-purple-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Items: {inventory.length}</div>
-              <div className="text-[10px] sm:text-xs font-medium text-rose-600 bg-rose-50 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Low Stock: {lowStockItems.length}</div>
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
+              <div className="text-[10px] sm:text-xs font-medium text-purple-600 bg-purple-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Items: {inventory.length}</div>
+              <div className="text-[10px] sm:text-xs font-medium text-rose-600 bg-rose-50 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Low Stock: {lowStockItems.length}</div>
             </div>
           </div>
         </div>
@@ -1231,19 +1347,19 @@ export function Dashboard() {
 
         {/* Total Payable (Vendor Payable) */}
         {((user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'cashier') || user?.role === 'new_limited_access') && (
-        <div onClick={() => { setPayableModalTab('vendors'); handleBoxClick("vendor-payable"); }} className={`card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-200`}>
+        <div onClick={() => { setPayableModalTab('vendors'); handleBoxClick("vendor-payable"); }} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-rose-200`}>
           <div>
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase flex items-center justify-between">
+            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase flex items-center justify-between gap-1">
               <span>Vendor Payable (وینڈرز کو دینا ہے)</span>
-              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full">دینا ہے</span>
+              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full shrink-0">دینا ہے</span>
             </h3>
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className={`text-lg sm:text-3xl font-extrabold ${totalVendorPayableOnly > 0 ? 'text-rose-600' : 'text-slate-800 dark:text-slate-100'}`}>
               PKR {formatCurrency(totalVendorPayableOnly)}
             </div>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 dark:bg-sky-950/60 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Vendors: {vendorBalances.filter(v => v.balance < 0).length}</div>
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
+              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 dark:bg-sky-950/60 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Vendors: {vendorBalances.filter(v => v.balance < 0).length}</div>
               {totalCustomerPrepaid > 0 && (
                 <div className="text-[10px] sm:text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/60 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
                   + PKR {formatCurrency(totalCustomerPrepaid)} Cust. Advance
@@ -1256,19 +1372,19 @@ export function Dashboard() {
 
         {/* Total Receivable (Customer Receivable) */}
         {((user?.role !== 'limited_access' && user?.role !== 'sales_stock_only' && user?.role !== 'cashier') || user?.role === 'new_limited_access') && (
-        <div onClick={() => { setReceivableModalTab('customers'); handleBoxClick("vendor-receivable"); }} className={`card p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:h-[160px] gap-2 sm:gap-0 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-emerald-200`}>
+        <div onClick={() => { setReceivableModalTab('customers'); handleBoxClick("vendor-receivable"); }} className={`card p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 relative flex flex-col justify-between min-h-[140px] sm:min-h-[168px] gap-2 sm:gap-1 cursor-pointer hover:shadow-md transition-shadow ring-2 ring-transparent hover:ring-emerald-200`}>
           <div>
-            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase flex items-center justify-between">
+            <h3 className="text-xs sm:text-sm font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase flex items-center justify-between gap-1">
               <span>Customer Receivable (کسٹمرز سے لینا ہے)</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">وصولی</span>
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full shrink-0">وصولی</span>
             </h3>
           </div>
-          <div className="mt-4 flex flex-col justify-end flex-grow">
+          <div className="mt-2 flex flex-col justify-end flex-grow">
             <div className={`text-lg sm:text-3xl font-extrabold ${totalCustomerReceivable > 0 ? 'text-emerald-600' : 'text-slate-800 dark:text-slate-100'}`}>
               PKR {formatCurrency(totalCustomerReceivable)}
             </div>
-            <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
-              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 dark:bg-sky-950/60 inline-block px-2 sm:px-3 py-1 rounded-full w-fit">Customers: {customerBalances.filter(c => c.balance < 0).length}</div>
+            <div className="mt-1 flex flex-wrap gap-1 sm:gap-1.5">
+              <div className="text-[10px] sm:text-xs font-medium text-sky-600 bg-sky-50 dark:bg-sky-950/60 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">Customers: {customerBalances.filter(c => c.balance < 0).length}</div>
               {totalVendorReceivableOnly > 0 && (
                 <div className="text-[10px] sm:text-xs font-medium text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 inline-block px-2 sm:px-2.5 py-0.5 rounded-full w-fit">
                   + PKR {formatCurrency(totalVendorReceivableOnly)} Vendor Adv.
@@ -2644,6 +2760,291 @@ export function Dashboard() {
           <p className="text-[9px] text-gray-500 text-center mt-6">
             Computer generated report &bull; Manzoor Collection POS &bull; {new Date().toLocaleDateString()}
           </p>
+        </div>
+      )}
+
+      {/* Modal for setting / editing Daily Opening Galla */}
+      {showOpeningCashModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                  <Coins className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Daily Opening Galla</h2>
+                  <p className="text-xs text-slate-500 font-urdu">روزانہ کا پہلا پرانا کیش گلہ درج کریں</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOpeningCashModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDailyOpeningBalance} className="space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200">
+                <div className="flex justify-between font-bold mb-1">
+                  <span>Branch: {currentBranch?.name || 'Main Branch'}</span>
+                  <span>Date: {selectedDailyDateStr}</span>
+                </div>
+                <p className="text-[11px] font-urdu text-amber-800 dark:text-amber-300">
+                  یہ ابتدائی گلہ کی رقم آج کے کاؤنٹر دراز کیش (Drawer Cash) میں خودبخود شامل ہو جائے گی۔
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                  Opening Cash Amount (روپے)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  autoFocus
+                  placeholder="e.g. 5000"
+                  value={openingCashInput}
+                  onChange={(e) => setOpeningCashInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-base font-mono font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+
+              {/* Quick suggestion buttons */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <span className="text-[10px] font-bold text-slate-400 w-full">Quick Set:</span>
+                {[0, 1000, 2000, 5000, 10000, 20000].map(amt => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setOpeningCashInput(amt)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-mono font-bold hover:bg-amber-100 dark:hover:bg-amber-950 transition"
+                  >
+                    {amt === 0 ? 'Zero (0)' : `${(amt/1000).toFixed(0)}k`}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowOpeningCashModal(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingOpeningCash}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSavingOpeningCash ? 'Saving...' : 'Save Opening Galla'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Actual Galla / Drawer Cash Breakdown */}
+      {showDrawerBreakdownModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200 dark:border-slate-800 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                  <Banknote className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-800 dark:text-slate-100">
+                    Actual Galla Breakdown (اصل دراز کیش کا حساب)
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Branch: {currentBranch?.name || 'Main Branch'} &bull; Date: {selectedDailyDateStr}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDrawerBreakdownModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto space-y-4 pr-1 flex-1">
+              {/* Reconciliation Formula Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase">
+                    <span>1. Opening Galla (+)</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDrawerBreakdownModal(false);
+                        setOpeningCashInput(todayOpeningBalance || '');
+                        setShowOpeningCashModal(true);
+                      }}
+                      className="underline hover:text-amber-900"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <div className="text-base font-black font-mono text-amber-800 dark:text-amber-200 mt-1">
+                    PKR {drawerSummary.openingGalla.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-amber-700/80 font-urdu">افتتاحی گلہ</div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60">
+                  <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase">
+                    2. In-Store Cash Sale (+)
+                  </div>
+                  <div className="text-base font-black font-mono text-emerald-800 dark:text-emerald-200 mt-1">
+                    PKR {drawerSummary.inStoreCashSales.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-emerald-700/80 font-urdu">
+                    نقد کاؤنٹر سیل (آن لائن/بینک شامل نہیں)
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/60">
+                  <div className="text-[10px] font-bold text-sky-700 dark:text-sky-300 uppercase">
+                    3. Owner Cash In (+)
+                  </div>
+                  <div className="text-base font-black font-mono text-sky-800 dark:text-sky-200 mt-1">
+                    PKR {drawerSummary.ownerCashIn.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-sky-700/80 font-urdu">مالک سے کیش وصول</div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60">
+                  <div className="text-[10px] font-bold text-rose-700 dark:text-rose-300 uppercase">
+                    4. Cash Handover (-)
+                  </div>
+                  <div className="text-base font-black font-mono text-rose-800 dark:text-rose-200 mt-1">
+                    - PKR {drawerSummary.cashHandoversToOwner.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-rose-700/80 font-urdu">مالک کو نقد دیا</div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/60">
+                  <div className="text-[10px] font-bold text-orange-700 dark:text-orange-300 uppercase">
+                    5. Cash Expenses (-)
+                  </div>
+                  <div className="text-base font-black font-mono text-orange-800 dark:text-orange-200 mt-1">
+                    - PKR {drawerSummary.shopCashExpenses.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-orange-700/80 font-urdu">دکان کے نقد اخراجات</div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60">
+                  <div className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase">
+                    6. Cash Returns (-)
+                  </div>
+                  <div className="text-base font-black font-mono text-purple-800 dark:text-purple-200 mt-1">
+                    - PKR {drawerSummary.inStoreCashReturns.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-purple-700/80 font-urdu">واپسی نقد کیش</div>
+                </div>
+              </div>
+
+              {/* Net Result Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-md">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-emerald-100">
+                    Actual Galla / Net Cash in Drawer (=)
+                  </div>
+                  <div className="text-[11px] font-urdu text-emerald-100/90">
+                    کل سیل (PKR {formatCurrency(dailySales)}) میں سے بینک/آن لائن، اخراجات اور ہینڈ اوور نکال کر اصل دراز کیش
+                  </div>
+                </div>
+                <div className="text-2xl font-black font-mono">
+                  PKR {drawerSummary.netDrawerCash.toLocaleString()}
+                </div>
+              </div>
+
+              {/* Itemized Drawer Entries */}
+              <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+                <div className="bg-slate-50 dark:bg-slate-800/70 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800 flex justify-between">
+                  <span>Today's Drawer Cash Entries ({drawerSummary.rows.length})</span>
+                  <span className="font-urdu text-slate-500">آج کے دراز کیش کا ریکارڈ</span>
+                </div>
+                {drawerSummary.rows.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-500">
+                    No cash drawer entries recorded for {selectedDailyDateStr}.
+                  </div>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 text-[10px] uppercase text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                        <tr>
+                          <th className="py-2 px-3">Type</th>
+                          <th className="py-2 px-3">Ref</th>
+                          <th className="py-2 px-3">Description</th>
+                          <th className="py-2 px-3 text-right">In (+)</th>
+                          <th className="py-2 px-3 text-right">Out (-)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {drawerSummary.rows.map((r) => (
+                          <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                            <td className="py-2 px-3 font-bold">
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${
+                                r.inflow > 0
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                              }`}>
+                                {r.inflow > 0 ? <ArrowDownRight className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+                                {r.label}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-300">{r.voucherNo}</td>
+                            <td className="py-2 px-3 text-slate-700 dark:text-slate-300 max-w-[200px] truncate" title={r.description}>
+                              {r.description}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600">
+                              {r.inflow > 0 ? `+${r.inflow.toLocaleString()}` : '-'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-rose-600">
+                              {r.outflow > 0 ? `-${r.outflow.toLocaleString()}` : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center gap-3 pt-4 mt-4 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDrawerBreakdownModal(false);
+                  navigate('/owner-account');
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Full Cash Flow & Record Handover</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDrawerBreakdownModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 text-xs font-bold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

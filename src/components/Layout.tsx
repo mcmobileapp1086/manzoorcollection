@@ -242,18 +242,20 @@ export function Layout() {
                     }
                   }}
                   className={clsx(
-                    isActive ? 'bg-[#1e293b] text-sky-400 border-l-4 border-sky-400' : 'text-slate-400 hover:text-white',
-                    'flex items-center px-5 py-3 text-sm transition-colors justify-between'
+                    isActive 
+                      ? 'bg-slate-800/90 text-sky-400 font-semibold shadow-xs border-l-2 border-sky-400' 
+                      : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50',
+                    'flex items-center mx-2 px-3.5 py-2.5 rounded-xl text-xs transition-all duration-150 justify-between group'
                   )}
                 >
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center">
-                      {item.icon && <item.icon className="mr-3 flex-shrink-0 h-5 w-5" />}
-                      {item.name}
+                      {item.icon && <item.icon className={clsx("mr-3 flex-shrink-0 h-4 w-4 transition-transform group-hover:scale-110", isActive ? "text-sky-400" : "text-slate-400 group-hover:text-slate-200")} />}
+                      <span className="truncate">{item.name}</span>
                     </div>
                     {item.href === '/profit-loss' && (
-                      <span className="flex items-center text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wider uppercase ml-2 gap-1 border border-amber-400/20">
-                        <Lock className="w-3 h-3" />
+                      <span className="flex items-center text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase ml-2 gap-1 border border-amber-400/20">
+                        <Lock className="w-2.5 h-2.5" />
                         Lock
                       </span>
                     )}

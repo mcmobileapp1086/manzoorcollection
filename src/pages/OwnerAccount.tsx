@@ -3,10 +3,11 @@ import { useBranch } from '../context/BranchContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { collection, query, where, Timestamp, doc, addDoc, updateDoc, deleteDoc } from '../lib/customFirestore';
-import { db, safeCollectionSnapshot } from '../lib/firebase';
+import { db, safeCollectionSnapshot, safeGetDocs } from '../lib/firebase';
 import { 
   Landmark, 
   Plus, 
+  Save,
   ArrowDownRight, 
   ArrowUpRight, 
   Printer, 
@@ -34,7 +35,9 @@ import {
   SlidersHorizontal,
   BarChart3,
   Layers,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Coins,
+  Edit2
 } from 'lucide-react';
 import { printInvoice } from '../lib/print';
 import { format, startOfDay, endOfDay, startOfWeek, startOfMonth, isWithinInterval, isValid } from 'date-fns';
@@ -52,6 +55,7 @@ const safeFormat = (date: any, formatStr: string) => {
 import { OwnerTransaction } from '../types';
 import toast from 'react-hot-toast';
 import { recordActivityLog } from '../lib/activityLogger';
+import { calculateCashDrawer } from '../lib/cashDrawer';
 
 export interface AccountSaleBreakdown {
   online: number;
@@ -77,10 +81,11 @@ export function OwnerAccount() {
   const [transactions, setTransactions] = useState<OwnerTransaction[]>([]);
   const [salesTransfers, setSalesTransfers] = useState<any[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<any[]>([]);
+  const [allLedgerEntries, setAllLedgerEntries] = useState<any[]>([]);
 
   // Top Navigation View Tabs: Sale Type Dashboard, Online Bills, In-Store Bills, All Records, Cash Handover, Bank & Wallets
-  const [activeTab, setActiveTab] = useState<'sale_type_dashboard' | 'online_bills' | 'instore_bills' | 'all' | 'cash_handover' | 'bank_accounts'>('sale_type_dashboard');
-  const [saleTypeSubFilter, setSaleTypeSubFilter] = useState<'all' | 'Online' | 'In-Store'>('all');
+  const [activeTab, setActiveTab] = useState<'sale_type_dashboard' | 'online_bills' | 'instore_bills' | 'cash_flow' | 'all' | 'cash_handover' | 'bank_accounts'>('sale_type_dashboard');
+  const [saleTypeSubFilter, setSaleTypeSubFilter] = useState<'all' | 'Online' | 'In-Store' | 'CashByHand'>('all');
   const [onlineBillStatusFilter, setOnlineBillStatusFilter] = useState<'all' | 'advance' | 'cleared' | 'pending_cod'>('all');
   const [showOnlineStatementPreview, setShowOnlineStatementPreview] = useState(false);
   const [showSaleTypeStatementPreview, setShowSaleTypeStatementPreview] = useState(false);
@@ -139,6 +144,67 @@ export function OwnerAccount() {
     return inWords(Math.floor(Math.abs(num))).trim() + ' Rupees Only';
   };
 
+  // Daily Opening Galla Balance State
+  const [dailyOpeningBalances, setDailyOpeningBalances] = useState<Record<string, number>>({});
+  const [showOpeningCashModal, setShowOpeningCashModal] = useState(false);
+  const [openingCashInput, setOpeningCashInput] = useState<number | ''>('');
+  const [isSavingOpeningCash, setIsSavingOpeningCash] = useState(false);
+
+  useEffect(() => {
+    let qOpening: any = collection(db, 'dailyOpeningCash');
+    if (currentBranchId) {
+      qOpening = query(qOpening, where('branchId', '==', currentBranchId));
+    }
+    const unsubOpening = safeCollectionSnapshot(qOpening, (snap) => {
+      const map: Record<string, number> = {};
+      snap.docs.forEach(d => {
+        const data = d.data() as any;
+        if (data.date && data.openingBalance !== undefined) {
+          map[data.date] = Number(data.openingBalance) || 0;
+        }
+      });
+      setDailyOpeningBalances(map);
+    });
+    return () => unsubOpening();
+  }, [currentBranchId]);
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const todayOpeningGalla = dailyOpeningBalances[todayStr] || 0;
+
+  const handleSaveDailyOpeningBalance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingOpeningCash(true);
+    try {
+      const val = Number(openingCashInput) || 0;
+      const bId = currentBranchId || 'main';
+      const qExist = query(collection(db, 'dailyOpeningCash'), where('branchId', '==', bId), where('date', '==', todayStr));
+      const snap = await safeGetDocs(qExist);
+      if (snap.docs.length > 0) {
+        await updateDoc(doc(db, 'dailyOpeningCash', snap.docs[0].id), {
+          openingBalance: val,
+          updatedAt: Date.now(),
+          updatedBy: user?.name || 'Admin'
+        });
+      } else {
+        await addDoc(collection(db, 'dailyOpeningCash'), {
+          branchId: bId,
+          date: todayStr,
+          openingBalance: val,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          updatedBy: user?.name || 'Admin'
+        });
+      }
+      toast.success('Opening Galla Balance Saved!');
+      setShowOpeningCashModal(false);
+    } catch (err: any) {
+      console.error('Error saving opening balance:', err);
+      toast.error('Failed to save opening balance');
+    } finally {
+      setIsSavingOpeningCash(false);
+    }
+  };
+
   // Load Transactions - Centrally across ALL branches without branch filtering
   useEffect(() => {
     // Owner Account is the business owner's master account across the entire company: do NOT filter by branchId
@@ -183,6 +249,7 @@ export function OwnerAccount() {
 
     const unsubLedger = safeCollectionSnapshot(lQ, (snap) => {
       const allLedger = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAllLedgerEntries(allLedger);
       // Filter ledger entries with Owner Transfer, Owner Withdrawal, Owner Capital, Online Received
       const ownerLedger = allLedger.filter((l: any) => {
         const cat = l.category || '';
@@ -250,6 +317,13 @@ export function OwnerAccount() {
         } else {
           resolvedSaleType = 'In-Store';
         }
+      } else {
+        // Explicit 'Online Received' category goes to Online; Cash Handover, Cash by Hand & Store collection go to In-Store
+        if (t.category === 'Online Received') {
+          resolvedSaleType = 'Online';
+        } else {
+          resolvedSaleType = 'In-Store';
+        }
       }
 
       const isOnlineBill = resolvedSaleType === 'Online';
@@ -277,7 +351,7 @@ export function OwnerAccount() {
         handledBy: t.handledBy || (linkedSale?.onlineEmployeeName || linkedSale?.salesmanName || ''),
         onlineEmployeeName: linkedSale?.onlineEmployeeName || linkedSale?.salesmanName || t.handledBy || '',
         onlineEmployeeCode: linkedSale?.onlineEmployeeCode || '',
-        customerName: t.senderName || linkedSale?.customerName || (isOnlineBill ? 'Online Customer' : (isInStoreBill ? 'Walk-in' : '')),
+        customerName: t.senderName || linkedSale?.customerName || (isOnlineBill ? 'Online Customer' : (t.category === 'Cash Handover' ? 'Cash Handover to Owner' : (isInStoreBill ? 'Walk-in' : ''))),
         customerPhone: linkedSale?.customerPhone || linkedSale?.phone || '',
         shippingAddress: linkedSale?.shippingAddress || '',
         billTotal: Number(linkedSale?.total) || Number(t.amount) || 0,
@@ -607,13 +681,16 @@ export function OwnerAccount() {
       const isSale = item.saleType === 'Online' || item.saleType === 'In-Store' || item.isOnlineBill === true || item.isInStoreBill === true;
       if (!isSale) return false;
 
-      // Sub-filter: Online vs In-Store vs All
+      // Sub-filter: Online vs In-Store vs CashByHand vs All
       if (saleTypeSubFilter === 'Online') {
         const isOnline = item.saleType === 'Online' || item.isOnlineBill === true;
         if (!isOnline) return false;
       } else if (saleTypeSubFilter === 'In-Store') {
-        const isInStore = (item.saleType === 'In-Store' || item.isInStoreBill === true) && item.saleType !== 'Online' && !item.isOnlineBill;
+        const isInStore = (item.saleType === 'In-Store' || item.isInStoreBill === true) && item.saleType !== 'Online' && !item.isOnlineBill && item.accountHead !== 'Cash by Hand' && item.category !== 'Cash Handover';
         if (!isInStore) return false;
+      } else if (saleTypeSubFilter === 'CashByHand') {
+        const isCash = item.accountHead === 'Cash by Hand' || item.paymentMode === 'Cash by Hand' || item.category === 'Cash Handover';
+        if (!isCash) return false;
       }
 
       // Date filter
@@ -896,6 +973,69 @@ export function OwnerAccount() {
     };
   }, [filteredList]);
 
+  // Today's exact Actual Galla (matches Dashboard top bar 100%)
+  const todayDrawerSummary = React.useMemo(() => {
+    const tStart = startOfDay(new Date()).getTime();
+    const tEnd = endOfDay(new Date()).getTime();
+    return calculateCashDrawer({
+      sales: allSalesRaw,
+      ledgerEntries: allLedgerEntries,
+      ownerTransactions: transactions,
+      openingGalla: todayOpeningGalla,
+      branchId: currentBranchId,
+      fallbackBranchId: branches[0]?.id || 'main',
+      isWithinDate: (ts) => ts >= tStart && ts <= tEnd,
+    });
+  }, [allSalesRaw, allLedgerEntries, transactions, todayOpeningGalla, currentBranchId, branches]);
+
+  // Period-filtered Cash Flow & Drawer Cash Reconciliation Formula
+  const cashFlowMetrics = React.useMemo(() => {
+    let periodOpeningGalla = todayOpeningGalla;
+    if (dateFilter === 'today') {
+      periodOpeningGalla = todayOpeningGalla;
+    } else if (dateFilter === 'yesterday') {
+      const yStr = format(new Date(Date.now() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+      periodOpeningGalla = dailyOpeningBalances[yStr] || 0;
+    } else if (dateFilter === 'custom' && startDate && startDate === endDate) {
+      periodOpeningGalla = dailyOpeningBalances[startDate] || 0;
+    } else if (dateFilter === 'all') {
+      periodOpeningGalla = (Object.values(dailyOpeningBalances) as number[]).reduce((s, v) => s + (Number(v) || 0), 0);
+    } else {
+      const { start, end } = getDateRange();
+      periodOpeningGalla = (Object.entries(dailyOpeningBalances) as [string, number][]).reduce((sum, [dStr, val]) => {
+        const [py, pm, pd] = dStr.split('-').map(Number);
+        if (!py || !pm || !pd) return sum;
+        const dTime = new Date(py, pm - 1, pd, 12, 0, 0).getTime();
+        if (dTime >= start.getTime() && dTime <= end.getTime()) {
+          return sum + (Number(val) || 0);
+        }
+        return sum;
+      }, 0);
+    }
+
+    const summary = calculateCashDrawer({
+      sales: allSalesRaw,
+      ledgerEntries: allLedgerEntries,
+      ownerTransactions: transactions,
+      openingGalla: periodOpeningGalla,
+      branchId: currentBranchId,
+      fallbackBranchId: branches[0]?.id || 'main',
+      isWithinDate: isItemWithinDate,
+    });
+
+    return {
+      openingDrawerCash: summary.openingGalla,
+      inStoreCashSales: summary.inStoreCashSales,
+      inStoreCashReturns: summary.inStoreCashReturns,
+      netCashSales: summary.netCashSales,
+      ownerCashIn: summary.ownerCashIn,
+      cashHandoversToOwner: summary.cashHandoversToOwner,
+      shopCashExpenses: summary.shopCashExpenses,
+      netDrawerCash: summary.netDrawerCash,
+      rows: summary.rows,
+    };
+  }, [allSalesRaw, allLedgerEntries, transactions, currentBranchId, branches, dateFilter, startDate, endDate, todayOpeningGalla, dailyOpeningBalances]);
+
   // Memoized chronological list for statement printing with running balance
   const chronologicalList = React.useMemo(() => {
     // Sort oldest first for running balance calculation
@@ -1053,6 +1193,34 @@ export function OwnerAccount() {
       if (editTxId) {
         // Update existing transaction
         await updateDoc(doc(db, 'ownerTransactions', editTxId), dataToSave);
+
+        // Keep mirrored ledger entry in sync
+        try {
+          let ledgerCategory = 'Owner Withdrawal';
+          if (txCategory === 'Online Received') {
+            ledgerCategory = 'Online Received';
+          } else if (txType === 'IN') {
+            ledgerCategory = 'Owner Capital';
+          }
+          const qMirrored = query(collection(db, 'ledger'), where('ownerTxId', '==', editTxId));
+          const mirroredSnap = await safeGetDocs(qMirrored);
+          for (const mDoc of mirroredSnap.docs) {
+            await updateDoc(doc(db, 'ledger', mDoc.id), {
+              branchId: branchToUse,
+              date: timestamp,
+              description: `${finalAccountHead} | ${finalDescription} (${ownerName.trim()})`,
+              category: ledgerCategory,
+              type: txType,
+              amount: numAmount,
+              reference: generatedVoucher,
+              accountName: finalAccountHead,
+              ownerName: ownerName.trim(),
+            });
+          }
+        } catch (syncErr) {
+          console.warn('Could not sync mirrored ledger entry on edit:', syncErr);
+        }
+
         toast.success("Transaction updated successfully!");
       } else {
         // Create new transaction in ownerTransactions
@@ -1122,6 +1290,17 @@ export function OwnerAccount() {
 
     try {
       await deleteDoc(doc(db, 'ownerTransactions', item.id));
+
+      // Also delete mirrored ledger entries linked via ownerTxId
+      try {
+        const qMirrored = query(collection(db, 'ledger'), where('ownerTxId', '==', item.id));
+        const mirroredSnap = await safeGetDocs(qMirrored);
+        for (const mDoc of mirroredSnap.docs) {
+          await deleteDoc(doc(db, 'ledger', mDoc.id));
+        }
+      } catch (syncErr) {
+        console.warn('Could not delete mirrored ledger entry:', syncErr);
+      }
 
       await recordActivityLog({
         action: 'delete',
@@ -1222,8 +1401,8 @@ export function OwnerAccount() {
           </div>
         </div>
 
-        {/* Active Logged-In Branch (صرف لاگ ان برانچ - کوئی سلیکشن نہیں) */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-3">
+        {/* Active Logged-In Branch & Real-time Drawer Cash Widget */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
               <Building2 className="w-5 h-5" />
@@ -1244,9 +1423,55 @@ export function OwnerAccount() {
               </div>
             </div>
           </div>
+
+          {/* Real-time Opening Galla & Drawer Cash Widgets */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOpeningCashInput(todayOpeningGalla || '');
+                setShowOpeningCashModal(true);
+              }}
+              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-3.5 py-2.5 rounded-xl shadow-md border border-amber-400/30 cursor-pointer hover:scale-[1.02] transition"
+              title="Click to set or edit daily opening cash balance (روزانہ کا پہلا پرانا گلہ)"
+            >
+              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-bold">
+                <Coins className="w-4 h-4 text-white" />
+              </div>
+              <div className="text-left">
+                <div className="text-[10px] uppercase font-bold text-amber-100 flex items-center gap-1">
+                  <span>Opening Galla</span>
+                  <span className="font-urdu font-normal text-amber-200">(افتتاحی گلہ)</span>
+                  <Edit2 className="w-3 h-3 text-amber-200 ml-0.5" />
+                </div>
+                <div className="text-lg font-black font-mono tracking-tight">
+                  PKR {todayOpeningGalla.toLocaleString()}
+                </div>
+              </div>
+            </button>
+
+            <div 
+              onClick={() => setActiveTab('cash_flow')}
+              className="flex items-center gap-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-md border border-emerald-500/30 shrink-0 cursor-pointer hover:scale-[1.02] transition"
+              title="Today's Actual Galla / Cash in Drawer (آج کا اصل دراز کیش) - Click to view Cash Flow"
+            >
+              <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center font-bold">
+                <Banknote className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase font-bold text-emerald-100 flex items-center gap-1.5">
+                  <span>Today Actual Galla</span>
+                  <span className="font-urdu font-normal text-emerald-200">(آج کا دراز کیش)</span>
+                </div>
+                <div className="text-xl font-black font-mono tracking-tight">
+                  PKR {todayDrawerSummary.netDrawerCash.toLocaleString()}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Navigation Tabs Bar: Sale Type Dashboard, Online Bills, In-Store Bills, All Records, Cash Handover, Bank & Wallets */}
+        {/* Navigation Tabs Bar: Sale Type Dashboard, Online Bills, In-Store Bills, Cash Flow & Drawer Cash, All Records, Cash Handover, Bank & Wallets */}
         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto">
           {/* TAB 1: Sale Type Dashboard */}
           <button
@@ -1293,6 +1518,22 @@ export function OwnerAccount() {
             <span>In-Store Bills (اسٹور بلز)</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${activeTab === 'instore_bills' ? 'bg-white text-emerald-800' : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'}`}>
               {inStoreBillsList.length} Bills
+            </span>
+          </button>
+
+          {/* TAB 4: Cash Flow & Drawer Cash */}
+          <button
+            onClick={() => setActiveTab('cash_flow')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition whitespace-nowrap cursor-pointer ${
+              activeTab === 'cash_flow'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 ring-2 ring-emerald-400/40'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Banknote className="w-4 h-4 text-emerald-300" />
+            <span>Cash Flow & Drawer Cash (دراز کیش)</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${activeTab === 'cash_flow' ? 'bg-white text-emerald-900' : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'}`}>
+              PKR {todayDrawerSummary.netDrawerCash.toLocaleString()}
             </span>
           </button>
 
@@ -1344,8 +1585,8 @@ export function OwnerAccount() {
         {/* ========================================================================= */}
         {activeTab === 'sale_type_dashboard' ? (
           <div className="space-y-5">
-            {/* Top 3 Executive Overview Cards: Online vs In-Store vs Combined Distribution */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Top 4 Executive Overview Cards: Online vs In-Store vs Cash Handover vs Combined Distribution */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               {/* Card 1: Online Delivery Bills */}
               <div className="bg-gradient-to-br from-sky-500/10 via-sky-500/5 to-white dark:to-slate-900 border-2 border-sky-300 dark:border-sky-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
                 <div className="flex items-center justify-between">
@@ -1434,7 +1675,51 @@ export function OwnerAccount() {
                 </div>
               </div>
 
-              {/* Card 3: Combined Total & Ratio Distribution */}
+              {/* Card 3: Cash Handover (Cash by Hand) */}
+              <div className="bg-gradient-to-br from-rose-500/10 via-rose-500/5 to-white dark:to-slate-900 border-2 border-rose-300 dark:border-rose-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs">
+                      <Banknote className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-black uppercase tracking-wider text-rose-900 dark:text-rose-200">
+                        Cash Handover (Cash by Hand)
+                      </span>
+                      <div className="text-[10px] text-rose-700 dark:text-rose-400 font-urdu font-bold">نقد کیش ہینڈ اوور (مالک کو نقد)</div>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                    {saleTypeMetrics.accountBreakdown.cash?.total ? (saleTypeMetrics.accountBreakdown.cash.total > 0 ? 'Cash Received' : '0 Entries') : 'Cash Handover'}
+                  </span>
+                </div>
+
+                <div className="text-2xl font-black text-rose-700 dark:text-rose-300 mt-3 font-mono">
+                  PKR {(saleTypeMetrics.accountBreakdown.cash?.total || 0).toLocaleString()}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-rose-200 dark:border-rose-800/60 text-[11px]">
+                  <div>
+                    <span className="text-slate-500 text-[10px] block">Payment Mode:</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 font-urdu">
+                      نقد کیش دیا گیا
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-slate-500 text-[10px] block">Account Head:</span>
+                    <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
+                      Cash by Hand
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-rose-100 dark:border-rose-900/40 flex items-center justify-between text-[10px] text-slate-500">
+                  <span className="font-urdu">مالک کھاتہ میں نقد جمع</span>
+                  <span className="font-mono font-bold text-rose-600">Cash Account</span>
+                </div>
+              </div>
+
+              {/* Card 4: Combined Total & Ratio Distribution */}
               <div className="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-white dark:to-slate-900 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1457,7 +1742,7 @@ export function OwnerAccount() {
                   PKR {saleTypeMetrics.grandTotalReceived.toLocaleString()}
                 </div>
 
-                {/* Dual Color Progress Bar */}
+                {/* Multi Color Progress Bar */}
                 <div className="mt-3 pt-3 border-t border-indigo-200 dark:border-indigo-800/60">
                   <div className="flex justify-between items-center text-[10px] font-bold mb-1.5">
                     <span className="text-sky-700 dark:text-sky-300 flex items-center gap-1">
@@ -1478,7 +1763,7 @@ export function OwnerAccount() {
                     <div 
                       style={{ width: `${saleTypeMetrics.inStorePct}%` }} 
                       className="bg-emerald-500 h-full transition-all duration-500"
-                      title={`In-Store Sales: ${saleTypeMetrics.inStorePct.toFixed(1)}%`}
+                      title={`In-Store Sales & Cash: ${saleTypeMetrics.inStorePct.toFixed(1)}%`}
                     />
                   </div>
                 </div>
@@ -1613,75 +1898,7 @@ export function OwnerAccount() {
               </div>
             </div>
 
-            {/* Staff & Sales Representative Collection Audit Card */}
-            {Object.keys(saleTypeMetrics.staffBreakdown).length > 0 && (
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold">
-                      <Hash className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 uppercase tracking-tight">
-                        Staff & Sales Representative Collection Audit
-                      </h3>
-                      <div className="text-[11px] text-slate-500 font-urdu font-semibold">
-                        ہر آن لائن نمائندے اور کاؤنٹر سیلزمین کی برانچ وار وصولی
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-xs font-mono font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-full border border-indigo-200 dark:border-indigo-800">
-                    {Object.keys(saleTypeMetrics.staffBreakdown).length} Staff Reps
-                  </span>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {(Object.entries(saleTypeMetrics.staffBreakdown) as [string, StaffSaleBreakdown][])
-                    .sort((a, b) => b[1].total - a[1].total)
-                    .map(([sName, sData], sIdx) => {
-                      const sharePct = saleTypeMetrics.grandTotalReceived > 0 ? (sData.total / saleTypeMetrics.grandTotalReceived) * 100 : 0;
-                      return (
-                        <div key={sIdx} className="bg-slate-50/70 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
-                          <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-700">
-                            <div>
-                              <span className="text-xs font-black text-slate-800 dark:text-slate-100 block">
-                                {sName}
-                              </span>
-                              {sData.code && (
-                                <span className="text-[10px] font-mono text-sky-600 dark:text-sky-400 font-bold block">
-                                  Code: {sData.code}
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-mono font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2 py-0.5 rounded">
-                              {sData.count} Bills
-                            </span>
-                          </div>
-
-                          <div className="mt-2 text-sm font-black font-mono text-slate-900 dark:text-slate-100">
-                            PKR {sData.total.toLocaleString()}
-                          </div>
-
-                          <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700/60 space-y-1 text-[10px]">
-                            <div className="flex justify-between items-center text-sky-700 dark:text-sky-300">
-                              <span>🚚 Online:</span>
-                              <span className="font-mono font-bold">PKR {sData.online.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-300">
-                              <span>🏪 In-Store:</span>
-                              <span className="font-mono font-bold">PKR {sData.inStore.toLocaleString()}</span>
-                            </div>
-                          </div>
-
-                          <div className="mt-2 text-[9px] font-mono text-slate-500 text-right">
-                            Share: {sharePct.toFixed(1)}%
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            )}
 
             {/* Filter Toolbar: Sale Type Sub-filters, Account Head, Date Filter, and Search */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
@@ -1730,6 +1947,21 @@ export function OwnerAccount() {
                     <span>🏪 In-Store Only (صرف اسٹور کاؤنٹر)</span>
                     <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-white/20">
                       {saleTypeMetrics.inStoreBillsCount}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setSaleTypeSubFilter('CashByHand')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer ${
+                      saleTypeSubFilter === 'CashByHand'
+                        ? 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-400/40'
+                        : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 hover:bg-rose-100 border border-rose-200 dark:border-rose-800'
+                    }`}
+                  >
+                    <Banknote className="w-3.5 h-3.5" />
+                    <span>💵 Cash by Hand Only (صرف نقد کیش)</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-white/20">
+                      {combinedItems.filter(i => (i.accountHead === 'Cash by Hand' || i.category === 'Cash Handover' || i.paymentMode === 'Cash by Hand') && (i.branchId || branches[0]?.id) === currentBranchId && isItemWithinDate(i.date)).length}
                     </span>
                   </button>
                 </div>
@@ -2191,6 +2423,213 @@ export function OwnerAccount() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        ) : activeTab === 'cash_flow' ? (
+          <div className="space-y-5">
+            {/* Top Reconciliation Header Banner */}
+            <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white rounded-2xl p-5 shadow-lg border border-emerald-700/50">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center border border-emerald-500/40">
+                    <Banknote className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black uppercase tracking-tight flex items-center gap-2">
+                      <span>Store Cash Drawer Reconciliation</span>
+                      <span className="text-xs font-urdu font-bold bg-emerald-500/30 text-emerald-200 px-2.5 py-0.5 rounded-full border border-emerald-400/30">
+                        کاؤنٹر نقد دراز کیش کھاتہ
+                      </span>
+                    </h2>
+                    <p className="text-xs text-emerald-200/80 mt-1 font-urdu">
+                      صافی کاؤنٹر کیش فرمولہ: (اسٹور نقد سیلز) - (مالک کو دیا گیا نقد) - (دکان کے نقد اخراجات) = باقی دراز میں موجود نقد کیش
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/20 text-right">
+                  <span className="text-[10px] uppercase font-bold text-emerald-200 block">Net Drawer Cash Right Now</span>
+                  <span className="text-2xl font-black font-mono text-white">
+                    PKR {cashFlowMetrics.netDrawerCash.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 5 Step Reconciliation Cards: Opening Balance + Cash Sales - Cash Handover - Cash Expenses = Net Drawer Cash */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {/* Step 1: Opening Cash Balance (+) */}
+              <div className="bg-white dark:bg-slate-900 border-2 border-indigo-300 dark:border-indigo-800 rounded-2xl p-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">1. Opening Cash (+)</span>
+                  <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs font-black">🪙</span>
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-urdu">پچھلا اوپننگ کیش بیلنس</div>
+                <div className="text-lg font-black text-indigo-700 dark:text-indigo-300 mt-1 font-mono">
+                  PKR {cashFlowMetrics.openingDrawerCash.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                  Previous days closing cash brought forward
+                </div>
+              </div>
+
+              {/* Step 2: Today's In-Store Cash Collections (+) */}
+              <div className="bg-white dark:bg-slate-900 border-2 border-emerald-300 dark:border-emerald-800 rounded-2xl p-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">2. Cash Sales In (+)</span>
+                  <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-xs font-black">+</span>
+                </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-urdu">نقد کاؤنٹر سیلز (واپسی کٹوتی کے بعد)</div>
+                <div className="text-lg font-black text-emerald-700 dark:text-emerald-300 mt-1 font-mono">
+                  PKR {cashFlowMetrics.netCashSales.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                  Gross Cash: {cashFlowMetrics.inStoreCashSales.toLocaleString()} | Returns: -{cashFlowMetrics.inStoreCashReturns.toLocaleString()}
+                </div>
+              </div>
+
+              {/* Step 3: Cash Handover to Owner (-) */}
+              <div className="bg-white dark:bg-slate-900 border-2 border-rose-300 dark:border-rose-800 rounded-2xl p-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider">3. Cash Handover (-)</span>
+                  <span className="w-5 h-5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 flex items-center justify-center text-xs font-black">-</span>
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-urdu">مالک کو دیا گیا نقد کیش</div>
+                <div className="text-lg font-black text-rose-700 dark:text-rose-300 mt-1 font-mono">
+                  PKR {cashFlowMetrics.cashHandoversToOwner.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                  Owner Cash In (+): PKR {cashFlowMetrics.ownerCashIn.toLocaleString()}
+                </div>
+              </div>
+
+              {/* Step 4: Shop Cash Expenses (-) */}
+              <div className="bg-white dark:bg-slate-900 border-2 border-amber-300 dark:border-amber-800 rounded-2xl p-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">4. Cash Expenses (-)</span>
+                  <span className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs font-black">-</span>
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-urdu">دکان کے نقد روزمرہ اخراجات</div>
+                <div className="text-lg font-black text-amber-700 dark:text-amber-300 mt-1 font-mono">
+                  PKR {cashFlowMetrics.shopCashExpenses.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                  Store operational daily expenses paid in cash
+                </div>
+              </div>
+
+              {/* Step 5: Net Drawer Cash (=) */}
+              <div className="bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-2xl p-3.5 shadow-md">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-100">5. Net Cash In Till (=)</span>
+                  <span className="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center text-xs font-black">=</span>
+                </div>
+                <div className="text-[11px] text-emerald-200 mt-1 font-urdu">دراز میں موجود صافی نقد رقم</div>
+                <div className="text-lg font-black text-white mt-1 font-mono">
+                  PKR {cashFlowMetrics.netDrawerCash.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-emerald-100/80 mt-1.5 pt-1.5 border-t border-white/20 font-mono">
+                  (Opening + Sales + OwnerIn - Handover - Exp)
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed Cash Flow Itemized Ledger Table */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 uppercase tracking-tight flex items-center gap-2">
+                    <span>Cash Drawer Transactions Ledger</span>
+                    <span className="text-[10px] font-urdu font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                      دراز کیش کی تمام نقد اینٹریز ({cashFlowMetrics.rows.length})
+                    </span>
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-500 font-bold uppercase">Period:</span>
+                  <select
+                    value={dateFilter}
+                    onChange={(e: any) => setDateFilter(e.target.value)}
+                    className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+                  >
+                    <option value="today">Today (آج)</option>
+                    <option value="yesterday">Yesterday (گزشتہ روز)</option>
+                    <option value="week">This Week (موجودہ ہفتہ)</option>
+                    <option value="month">This Month (موجودہ مہینہ)</option>
+                    <option value="custom">Custom Range</option>
+                    <option value="all">All Time</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Ledger Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase text-[10px] font-bold">
+                      <th className="py-2.5 px-3">Date & Time</th>
+                      <th className="py-2.5 px-3">Flow Type</th>
+                      <th className="py-2.5 px-3">Voucher / Ref</th>
+                      <th className="py-2.5 px-3">Description</th>
+                      <th className="py-2.5 px-3 text-right">Inflow (+)</th>
+                      <th className="py-2.5 px-3 text-right">Outflow (-)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {cashFlowMetrics.rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-slate-400">
+                          No cash drawer transactions found for the selected period.
+                        </td>
+                      </tr>
+                    ) : (
+                      cashFlowMetrics.rows.map((row) => {
+                        const isInflow = row.inflow > 0;
+                        const badgeClass =
+                          row.flowType === 'OPENING'
+                            ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300'
+                            : row.flowType === 'CASH_EXPENSE'
+                            ? 'bg-orange-100 dark:bg-orange-950/80 text-orange-800 dark:text-orange-300'
+                            : row.flowType === 'CASH_RETURN'
+                            ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300'
+                            : row.flowType === 'OWNER_CASH_IN'
+                            ? 'bg-sky-100 dark:bg-sky-950/80 text-sky-800 dark:text-sky-300'
+                            : isInflow
+                            ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300'
+                            : 'bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300';
+
+                        return (
+                          <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 dark:text-slate-400">
+                              {row.flowType === 'OPENING' || !row.date
+                                ? 'Opening Balance'
+                                : safeFormat(new Date(row.date), 'dd MMM yyyy, hh:mm a')}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded text-[10px] ${badgeClass}`}>
+                                {isInflow ? <ArrowDownRight className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+                                <span>{row.label}</span>
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-800 dark:text-slate-200">
+                              {row.voucherNo}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300">
+                              {row.description}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">
+                              {row.inflow > 0 ? `PKR ${row.inflow.toLocaleString()}` : '-'}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-600">
+                              {row.outflow > 0 ? `PKR ${row.outflow.toLocaleString()}` : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         ) : activeTab === 'online_bills' ? (
@@ -4442,8 +4881,8 @@ export function OwnerAccount() {
                   </div>
                 </div>
 
-                {/* 3-Column Executive Summary Box */}
-                <div className="grid grid-cols-3 gap-2 p-3 bg-slate-50 border-2 border-black rounded mb-4 text-xs">
+                {/* 4-Column Executive Summary Box */}
+                <div className="grid grid-cols-4 gap-2 p-3 bg-slate-50 border-2 border-black rounded mb-4 text-xs">
                   <div className="border-r border-slate-300 pr-2">
                     <div className="text-slate-600 text-[9px] uppercase font-bold">Online Delivery Received:</div>
                     <div className="text-[10px] font-urdu font-semibold text-slate-500">آن لائن وصولی</div>
@@ -4463,6 +4902,17 @@ export function OwnerAccount() {
                     </div>
                     <div className="text-[9px] text-slate-600 mt-0.5">
                       {saleTypeMetrics.inStoreBillsCount} Bills • {saleTypeMetrics.inStorePct.toFixed(1)}% Share
+                    </div>
+                  </div>
+
+                  <div className="border-r border-slate-300 pr-2">
+                    <div className="text-slate-600 text-[9px] uppercase font-bold">Cash Handover (Cash by Hand):</div>
+                    <div className="text-[10px] font-urdu font-semibold text-slate-500">مالک کو نقد کیش</div>
+                    <div className="text-sm font-black text-rose-700 font-mono mt-0.5">
+                      PKR {(saleTypeMetrics.accountBreakdown.cash?.total || 0).toLocaleString()}
+                    </div>
+                    <div className="text-[9px] text-slate-600 mt-0.5">
+                      Cash Mode • Handed by Hand
                     </div>
                   </div>
 
@@ -4695,6 +5145,94 @@ export function OwnerAccount() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for setting / editing Daily Opening Galla */}
+      {showOpeningCashModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                  <Coins className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Daily Opening Galla</h2>
+                  <p className="text-xs text-slate-500 font-urdu">روزانہ کا پہلا پرانا کیش گلہ درج کریں</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOpeningCashModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDailyOpeningBalance} className="space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200">
+                <div className="flex justify-between font-bold mb-1">
+                  <span>Branch: {currentBranch?.name || 'Main Branch'}</span>
+                  <span>Date: {todayStr}</span>
+                </div>
+                <p className="text-[11px] font-urdu text-amber-800 dark:text-amber-300">
+                  یہ ابتدائی گلہ کی رقم آج کے کاؤنٹر دراز کیش (Drawer Cash) میں خودبخود شامل ہو جائے گی۔
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                  Opening Cash Amount (روپے)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  autoFocus
+                  placeholder="e.g. 5000"
+                  value={openingCashInput}
+                  onChange={(e) => setOpeningCashInput(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-base font-mono font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+
+              {/* Quick suggestion buttons */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <span className="text-[10px] font-bold text-slate-400 w-full">Quick Set:</span>
+                {[0, 1000, 2000, 5000, 10000, 20000].map(amt => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setOpeningCashInput(amt)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-mono font-bold hover:bg-amber-100 dark:hover:bg-amber-950 transition"
+                  >
+                    {amt === 0 ? 'Zero (0)' : `${(amt/1000).toFixed(0)}k`}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowOpeningCashModal(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingOpeningCash}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSavingOpeningCash ? 'Saving...' : 'Save Opening Galla'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

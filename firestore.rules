@@ -75,5 +75,8 @@ service cloud.firestore {
     match /employeeReturns/{returnId} {
       allow read, write: if isSignedIn();
     }
+    match /dailyOpeningCash/{cashId} {
+      allow read, write: if isSignedIn();
+    }
   }
 }
